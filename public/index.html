@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kleenest | Influencer Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f0fdf4; color: #1a1a2e; min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #15803d 0%, #166534 60%, #14532d 100%);
+      color: #fff; padding: 18px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 4px 20px rgba(21,128,61,.35); position: sticky; top: 0; z-index: 100;
+    }
+    .logo-area { display: flex; align-items: center; gap: 14px; }
+    .logo-icon { width: 42px; height: 42px; border-radius: 10px; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    header h1 { font-size: 1.3rem; font-weight: 700; }
+    header p  { font-size: .75rem; opacity: .7; margin-top: 1px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .live-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); border-radius: 20px; padding: 5px 12px; font-size: .75rem; font-weight: 600; }
+    .live-dot { width: 7px; height: 7px; background: #4ade80; border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.3)} }
+    .last-updated { font-size: .7rem; opacity: .65; }
+    #refresh-btn { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3); color: #fff; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: .8rem; font-weight: 600; transition: background .2s; }
+    #refresh-btn:hover { background: rgba(255,255,255,.25); }
+
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex; gap: 0;
+      background: #fff; border-bottom: 2px solid #e5e7eb;
+      padding: 0 32px; position: sticky; top: 74px; z-index: 99;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    }
+    .tab-btn {
+      padding: 14px 24px; font-size: .9rem; font-weight: 600;
+      color: #6b7280; cursor: pointer; border: none; background: transparent;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: color .2s, border-color .2s; display: flex; align-items: center; gap: 8px;
+    }
+    .tab-btn:hover { color: #16a34a; }
+    .tab-btn.active { color: #16a34a; border-bottom-color: #16a34a; }
+    .tab-indicator { font-size: .72rem; background: #dcfce7; color: #166534; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+    .tab-btn.active .tab-indicator { background: #16a34a; color: #fff; }
+
+    /* ── Layout ── */
+    main { max-width: 1400px; margin: 0 auto; padding: 24px 24px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Loading ── */
+    #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 320px; gap: 18px; }
+    .spinner { width: 44px; height: 44px; border: 4px solid #dcfce7; border-top-color: #16a34a; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: #16a34a; font-weight: 600; }
+
+    /* ── Error ── */
+    #error-box { display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 18px 22px; margin-bottom: 20px; color: #dc2626; font-size: .9rem; }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      background: #fff; border-radius: 14px;
+      padding: 14px 18px; margin-bottom: 20px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+    }
+    .filters label { font-size: .73rem; font-weight: 700; color: #6b7280; margin-right: 4px; }
+    .filters select { border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 6px 10px; font-size: .82rem; color: #374151; background: #f9fafb; cursor: pointer; outline: none; transition: border-color .2s; }
+    .filters select:focus { border-color: #16a34a; }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .reset-btn { margin-left: auto; padding: 6px 14px; background: #f0fdf4; border: 1.5px solid #86efac; color: #15803d; border-radius: 8px; cursor: pointer; font-size: .8rem; font-weight: 600; transition: all .2s; }
+    .reset-btn:hover { background: #dcfce7; }
+
+    /* ── KPI Cards ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 22px; }
+    .kpi-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 900px) { .kpi-grid-4 { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 768px) { .kpi-grid { grid-template-columns: 1fr 1fr; } }
+    .kpi-card { background: #fff; border-radius: 16px; padding: 22px 24px; box-shadow: 0 1px 8px rgba(0,0,0,.07); border-left: 4px solid transparent; transition: transform .2s, box-shadow .2s; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.1); }
+    .kpi-card.green  { border-left-color: #16a34a; }
+    .kpi-card.blue   { border-left-color: #2563eb; }
+    .kpi-card.purple { border-left-color: #7c3aed; }
+    .kpi-card.teal   { border-left-color: #0d9488; }
+    .kpi-card.orange { border-left-color: #ea580c; }
+    .kpi-icon { font-size: 1.5rem; margin-bottom: 10px; }
+    .kpi-label { font-size: .72rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; }
+    .kpi-value { font-size: 2rem; font-weight: 800; color: #111827; margin: 4px 0; line-height: 1.1; }
+    .kpi-sub   { font-size: .74rem; color: #9ca3af; }
+
+    /* ── Cards ── */
+    .card { background: #fff; border-radius: 16px; padding: 22px; box-shadow: 0 1px 8px rgba(0,0,0,.07); }
+    .card-title { font-size: .95rem; font-weight: 700; color: #111827; }
+    .card-subtitle { font-size: .74rem; color: #9ca3af; margin-top: 2px; }
+    .section-title { font-size: .95rem; font-weight: 700; color: #374151; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #dcfce7; }
+
+    /* ── Charts ── */
+    .charts-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .charts-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+    @media (max-width: 1024px) { .charts-3 { grid-template-columns: 1fr 1fr; } .charts-2 { grid-template-columns: 1fr; } }
+    @media (max-width: 640px)  { .charts-3 { grid-template-columns: 1fr; } }
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ── Overall Targets ── */
+    .overall-targets-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 640px) { .overall-targets-row { grid-template-columns: 1fr; } }
+    .ot-card { background: #f0fdf4; border-radius: 12px; padding: 18px 20px; border: 1.5px solid #bbf7d0; }
+    .ot-card.blue-card { background: #eff6ff; border-color: #bfdbfe; }
+    .ot-label { font-size: .72rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .ot-nums  { font-size: 1.5rem; font-weight: 800; color: #111827; margin-bottom: 8px; }
+    .ot-nums span { font-size: .82rem; font-weight: 500; color: #6b7280; }
+    .ot-bar-bg { height: 9px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-bottom: 5px; }
+    .ot-bar-fill { height: 100%; border-radius: 99px; transition: width .7s ease; }
+    .ot-pct { font-size: .74rem; color: #6b7280; margin-bottom: 12px; }
+    .ot-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 1px solid #dbeafe; padding-top: 12px; margin-top: 2px; }
+    .ot-split-item {}
+    .ot-split-label { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
+    .ot-split-num { font-size: .95rem; font-weight: 800; color: #111827; }
+    .ot-split-num span { font-size: .72rem; font-weight: 500; color: #9ca3af; }
+    .ot-split-bar-bg { height: 4px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin: 4px 0 2px; }
+    .ot-split-bar-fill { height: 100%; border-radius: 99px; }
+    .ot-split-pct { font-size: .67rem; }
+
+    /* ── SKU Grid ── */
+    .sku-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .sku-card { background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 16px; transition: border-color .2s, box-shadow .2s; }
+    .sku-card:hover { border-color: #86efac; box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+    .sku-name { font-size: .86rem; font-weight: 700; color: #111827; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .sku-dot { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; flex-shrink: 0; }
+    .sku-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .sku-metric-box { background: #f9fafb; border-radius: 8px; padding: 8px 10px; }
+    .sku-metric-label { font-size: .66rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: .4px; }
+    .sku-metric-val { font-size: 1.1rem; font-weight: 800; color: #111827; margin-top: 2px; }
+    .sku-metric-target { font-size: .7rem; color: #9ca3af; }
+    .sku-bar-row { margin-top: 4px; }
+    .sku-bar-label { display: flex; justify-content: space-between; font-size: .69rem; color: #9ca3af; margin-bottom: 3px; }
+    .sku-bar-bg { height: 6px; background: #f3f4f6; border-radius: 99px; overflow: hidden; margin-bottom: 5px; }
+    .sku-bar-fill { height: 100%; border-radius: 99px; transition: width .6s ease; }
+    .sku-bar-fill.green-bar { background: linear-gradient(90deg, #16a34a, #4ade80); }
+    .sku-bar-fill.blue-bar  { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+    .sku-bar-fill.over-bar  { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+    /* ── POC Cards ── */
+    .poc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .poc-card { background: #f0fdf4; border-radius: 14px; padding: 18px; text-align: center; border: 1.5px solid #bbf7d0; transition: transform .2s, box-shadow .2s; }
+    .poc-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+    .poc-avatar { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #16a34a, #4ade80); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; font-weight: 800; margin: 0 auto 10px; box-shadow: 0 3px 10px rgba(22,163,74,.3); }
+    .poc-name   { font-weight: 700; font-size: .92rem; color: #111827; }
+    .poc-target { font-size: .82rem; color: #374151; margin-top: 6px; font-weight: 600; }
+    .poc-target span { color: #16a34a; font-size: 1rem; }
+    .poc-target-total { color: #9ca3af; }
+    .poc-prog-bg { height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin: 7px 0 4px; }
+    .poc-prog-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #16a34a, #4ade80); transition: width .7s ease; }
+    .poc-pct { font-size: .72rem; color: #6b7280; }
+
+    /* ── Target Progress List (Live tab) ── */
+    .target-list { display: flex; flex-direction: column; gap: 13px; max-height: 300px; overflow-y: auto; }
+    .target-item {}
+    .target-header { display: flex; justify-content: space-between; font-size: .81rem; margin-bottom: 5px; }
+    .target-name { font-weight: 600; color: #374151; }
+    .target-nums { color: #6b7280; }
+    .target-nums span { font-weight: 700; color: #111827; }
+    .progress-bar-bg { height: 9px; background: #f3f4f6; border-radius: 99px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #16a34a, #4ade80); transition: width .6s ease; }
+    .progress-bar-fill.over { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+    /* ── Badges ── */
+    .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: .7rem; font-weight: 700; }
+    .badge-approved { background: #dcfce7; color: #166534; }
+    .badge-pending  { background: #fef3c7; color: #92400e; }
+    .badge-kleenest { background: #dbeafe; color: #1e40af; }
+    .badge-klenzmo  { background: #ede9fe; color: #5b21b6; }
+    .link-btn { display: inline-block; padding: 3px 9px; background: #f0fdf4; border: 1px solid #86efac; color: #15803d; border-radius: 6px; text-decoration: none; font-size: .7rem; font-weight: 600; transition: background .2s; }
+    .link-btn:hover { background: #dcfce7; }
+
+    /* ── Table ── */
+    .table-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+    .search-box { padding: 7px 13px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: .82rem; width: 240px; outline: none; transition: border-color .2s; }
+    .search-box:focus { border-color: #16a34a; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .81rem; }
+    thead th { background: #f9fafb; color: #6b7280; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 10px 12px; text-align: left; border-bottom: 2px solid #e5e7eb; white-space: nowrap; cursor: pointer; user-select: none; }
+    thead th:hover { background: #f0fdf4; color: #16a34a; }
+    thead th.sorted-asc::after  { content: ' ↑'; color: #16a34a; }
+    thead th.sorted-desc::after { content: ' ↓'; color: #16a34a; }
+    tbody tr { border-bottom: 1px solid #f3f4f6; transition: background .15s; }
+    tbody tr:hover { background: #f0fdf4; }
+    tbody td { padding: 10px 12px; color: #374151; vertical-align: middle; }
+    .pagination { display: flex; align-items: center; gap: 7px; margin-top: 14px; justify-content: flex-end; flex-wrap: wrap; }
+    .page-btn { padding: 5px 11px; border: 1.5px solid #e5e7eb; background: #fff; border-radius: 7px; cursor: pointer; font-size: .78rem; color: #374151; transition: all .2s; }
+    .page-btn:hover, .page-btn.active { background: #16a34a; border-color: #16a34a; color: #fff; }
+    .page-info { font-size: .78rem; color: #6b7280; }
+
+    .mb20 { margin-bottom: 20px; }
+    .mb16 { margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo-area">
+    <div class="logo-icon">🧹</div>
+    <div>
+      <h1>Kleenest &nbsp;|&nbsp; Influencer Dashboard</h1>
+      <p>Live Analytics · Powered by Microsoft Graph API</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+    <span style="font-size:.75rem;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:16px;padding:4px 12px;font-weight:600;color:#fff;" id="period-badge">📅 April 2026</span>
+    <span class="last-updated" id="last-updated">Fetching…</span>
+    <button id="refresh-btn" onclick="loadDashboard()">⟳ Refresh</button>
+  </div>
+</header>
+
+<!-- ── Tab Bar ── -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('live')" id="tab-live">
+    🎬 Live Status <span class="tab-indicator" id="tab-live-count">—</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('orders')" id="tab-orders">
+    🛒 Orders Placed <span class="tab-indicator" id="tab-orders-count">—</span>
+  </button>
+</div>
+
+<main>
+  <!-- ── Loading ── -->
+  <div id="loading"><div class="spinner"></div><p>Fetching live data from Microsoft SharePoint…</p></div>
+  <div id="error-box"></div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 1 — LIVE STATUS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="tab-panel active" id="panel-live">
+
+    <!-- Filters -->
+    <div class="filters">
+      <div class="filter-group"><label>Month</label><select id="lv-month" onchange="applyLiveFilters()"><option value="">All Months</option></select></div>
+      <div class="filter-group"><label>SKU</label><select id="lv-product"><option value="">All SKUs</option></select></div>
+      <div class="filter-group"><label>Brand</label><select id="lv-brand"><option value="">All Brands</option></select></div>
+      <div class="filter-group"><label>Type</label>
+        <select id="lv-type" onchange="applyLiveFilters()">
+          <option value="">All Types</option>
+          <option value="inhouse">In-house</option>
+          <option value="agency">Agency</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>From</label>
+        <input type="date" id="lv-date-from" oninput="applyLiveFilters()"
+          style="border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:.82rem;color:#374151;background:#f9fafb;outline:none;" />
+      </div>
+      <div class="filter-group">
+        <label>To</label>
+        <input type="date" id="lv-date-to" oninput="applyLiveFilters()"
+          style="border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:.82rem;color:#374151;background:#f9fafb;outline:none;" />
+      </div>
+      <button class="reset-btn" onclick="resetLiveFilters()">Reset</button>
+    </div>
+
+    <!-- KPIs -->
+    <!-- Row 1: Reels + Influencers + SKUs + Overall Payout -->
+    <div class="kpi-grid kpi-grid-4 mb20">
+      <div class="kpi-card green">
+        <div class="kpi-icon">🎬</div>
+        <div class="kpi-label">Reels Gone Live</div>
+        <div class="kpi-value" id="lv-kpi-live" style="display:flex;align-items:baseline;gap:6px;">
+          <span id="lv-kpi-live-actual">—</span>
+          <span id="lv-kpi-live-target" style="font-size:1rem;font-weight:500;color:#9ca3af;"></span>
+        </div>
+        <div class="kpi-sub">Published on Instagram</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-icon">👤</div>
+        <div class="kpi-label">Unique Influencers</div>
+        <div class="kpi-value" id="lv-kpi-influencers">—</div>
+        <div class="kpi-sub">Active creators</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-label">SKUs Covered</div>
+        <div class="kpi-value" id="lv-kpi-skus">—</div>
+        <div class="kpi-sub">Unique products promoted</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-label">Overall Payout</div>
+        <div class="kpi-value" id="lv-kpi-payout-overall">—</div>
+        <div class="kpi-sub" id="lv-kpi-payout-overall-sub">In-house + Agency</div>
+      </div>
+    </div>
+
+    <!-- Row 2: In-house Payout + Agency Payout side-by-side -->
+    <div class="kpi-grid mb20" style="grid-template-columns:1fr 1fr;gap:16px;">
+      <!-- In-house payout -->
+      <div class="kpi-card" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1.2rem;">🏠</span>
+          <span style="font-size:.8rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;">In-house Payout</span>
+        </div>
+        <div class="kpi-value" id="lv-kpi-payout-inhouse" style="color:#15803d;">—</div>
+        <div class="kpi-sub" id="lv-kpi-payout-inhouse-sub" style="margin-top:6px;">—</div>
+      </div>
+      <!-- Agency payout with TTC + INK breakdown -->
+      <div class="kpi-card" style="background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1.5px solid #c4b5fd;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1.2rem;">🏢</span>
+          <span style="font-size:.8rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;">Agency Payout</span>
+        </div>
+        <div class="kpi-value" id="lv-kpi-payout-agency" style="color:#7c3aed;">—</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;" id="lv-kpi-payout-agency-breakdown">
+          <div style="display:flex;justify-content:space-between;font-size:.75rem;color:#6b7280;">
+            <span>TTC</span><span id="lv-kpi-payout-ttc">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.75rem;color:#6b7280;">
+            <span>Ink Revenue</span><span id="lv-kpi-payout-ink">—</span>
+          </div>
+          <div style="border-top:1px solid #c4b5fd;margin-top:3px;padding-top:3px;display:flex;justify-content:space-between;font-size:.73rem;color:#9ca3af;">
+            <span id="lv-kpi-payout-agency-sub">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="charts-3 mb20">
+      <div class="card">
+        <div class="card-title mb16">📊 Reels per Product</div>
+        <div class="chart-wrap"><canvas id="lv-chart-product"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title mb16">🏷️ Brand Split</div>
+        <div class="chart-wrap"><canvas id="lv-chart-brand"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title mb16">👤 POC-wise Reels</div>
+        <div class="chart-wrap"><canvas id="lv-chart-poc"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Reel Targets -->
+    <div class="card mb20">
+      <div class="card-title" style="margin-bottom:6px">🎯 Reel Targets — Live Status</div>
+      <div class="card-subtitle" style="margin-bottom:16px">Total 1,060 live target (Agency 660 + In-house 400)</div>
+      <!-- Overall + split bars -->
+      <div id="lv-overall-reel" style="margin-bottom:18px;"></div>
+      <!-- Per-product progress list (Agency only) -->
+      <div id="lv-target-list"></div>
+    </div>
+
+    <!-- Live Influencer Table -->
+    <div class="card">
+      <div class="table-top">
+        <div>
+          <div class="card-title">📋 Live Influencer Details</div>
+          <div class="card-subtitle" style="margin-top:2px">Use the <strong>Type</strong> filter above to switch between In-house and Agency</div>
+        </div>
+        <input class="search-box" id="lv-search" placeholder="🔍  Search influencer, product…" oninput="renderLiveTable()" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th onclick="sortLive('username')">Username</th>
+            <th onclick="sortLive('product')">Product</th>
+            <th onclick="sortLive('brand')">Brand</th>
+            <th>Category</th>
+            <th onclick="sortLive('poc')">POC / Agency</th>
+            <th onclick="sortLive('liveDate')">Live Date</th>
+            <th onclick="sortLive('views')">Views</th>
+            <th onclick="sortLive('likes')">Likes</th>
+            <th>Reel Link</th>
+          </tr></thead>
+          <tbody id="lv-table-body"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="lv-pagination"></div>
+    </div>
+
+  </div><!-- /panel-live -->
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 2 — ORDERS PLACED
+  ══════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-orders">
+
+    <!-- Filters -->
+    <div class="filters">
+      <div class="filter-group"><label>Month</label><select id="or-month" onchange="applyOrderFilters()"><option value="">All Months</option></select></div>
+      <div class="filter-group"><label>SKU</label><select id="or-product"><option value="">All SKUs</option></select></div>
+      <div class="filter-group"><label>Brand</label><select id="or-brand"><option value="">All Brands</option></select></div>
+      <div class="filter-group"><label>POC</label><select id="or-poc"><option value="">All POCs</option></select></div>
+      <button class="reset-btn" onclick="resetOrderFilters()">Reset</button>
+    </div>
+
+    <!-- KPI -->
+    <div style="margin-bottom:20px">
+      <div class="kpi-card green" style="max-width:320px">
+        <div class="kpi-icon">🛒</div>
+        <div class="kpi-label">Total Orders Placed</div>
+        <div class="kpi-value" id="or-kpi-orders">—</div>
+        <div class="kpi-sub" id="or-kpi-orders-sub">Across all team members</div>
+      </div>
+    </div>
+
+    <!-- Team Overview -->
+    <div class="card">
+      <div class="section-title">👥 Team Overview — Orders vs Target</div>
+      <div class="poc-grid" id="or-poc-cards"></div>
+    </div>
+
+  </div><!-- /panel-orders -->
+
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let RAW = null;
+let LV_FILTERED = [];   // Live tab filtered data
+let OR_FILTERED = [];   // Orders tab filtered data
+
+// Table sort state
+let lvSort = { key: 'liveDate', dir: -1 };
+let orSort = { key: 'liveDate', dir: -1 };
+let lvPage = 1, orPage = 1;
+const PAGE_SIZE = 15;
+
+// Chart instances
+const charts = {};
+
+// Chart colour palettes
+const GREEN_PAL  = ['#16a34a','#22c55e','#4ade80','#86efac','#bbf7d0','#15803d','#166534','#14532d'];
+const BRAND_COLS = { Kleenest: '#2563eb', Klenzmo: '#7c3aed', Unknown: '#9ca3af' };
+const POC_COLS   = ['#16a34a','#2563eb','#7c3aed','#ea580c','#0d9488','#d97706'];
+
+// ── Tab switch ────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  document.getElementById('loading').style.display = 'flex';
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('error-box').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/dashboard');
+    if (!res.ok) throw new Error('API error ' + res.status);
+    RAW = await res.json();
+
+    document.getElementById('last-updated').textContent =
+      'Updated ' + new Date(RAW.lastUpdated).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+    populateFilters();
+    applyLiveFilters();
+    applyOrderFilters();
+
+    document.getElementById('loading').style.display = 'none';
+    document.querySelectorAll('.tab-panel').forEach(p => p.style.display = '');
+
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    const eb = document.getElementById('error-box');
+    eb.style.display = 'block';
+    eb.textContent = '⚠️ ' + e.message;
+  }
+}
+
+// ── Month label helper ────────────────────────────────────────────────────────
+function monthLabel(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  const names = ['January','February','March','April','May','June',
+                 'July','August','September','October','November','December'];
+  return (names[parseInt(m, 10) - 1] || m) + ' ' + y;
+}
+
+// ── Populate filter dropdowns ─────────────────────────────────────────────────
+function populateFilters() {
+  // All live data combined — inhouse + agency; product names are now canonical on both
+  const allLive    = [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])];
+  const lvLive     = allLive.filter(i => i.liveLink && String(i.liveLink).startsWith('http'));
+  const lvProducts = [...new Set(lvLive.map(i => i.product).filter(Boolean))].sort();
+  const lvBrands   = [...new Set(lvLive.map(i => i.brand).filter(Boolean))].sort();
+
+  // Derive available months from all dated rows (inhouse + agency)
+  const months = [...new Set(
+    allLive.map(i => i.liveDate).filter(Boolean).map(d => d.slice(0, 7))
+  )].sort().reverse();  // newest first
+
+  fill('lv-product', lvProducts);
+  fill('lv-brand',   lvBrands);
+  fillMonths('lv-month', months);
+
+  const pocs       = [...new Set((RAW.influencers||[]).map(i => i.poc).filter(p => p && p !== 'Unassigned'))].sort();
+  const orProducts = [...new Set((RAW.influencers||[]).map(i => i.product).filter(Boolean))].sort();
+  const orBrands   = [...new Set((RAW.influencers||[]).map(i => i.brand).filter(Boolean))].sort();
+
+  // Order months — from inhouse rows (which have dates)
+  const orMonths = [...new Set(
+    (RAW.influencers||[]).map(i => i.liveDate).filter(Boolean).map(d => d.slice(0, 7))
+  )].sort().reverse();
+
+  fill('or-product', orProducts);
+  fill('or-brand',   orBrands);
+  fill('or-poc',     pocs);
+  fillMonths('or-month', orMonths);
+}
+
+function fill(id, opts) {
+  const sel = document.getElementById(id);
+  const first = sel.options[0].outerHTML;
+  sel.innerHTML = first + opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  sel.addEventListener('change', id.startsWith('lv') ? applyLiveFilters : applyOrderFilters);
+}
+
+function fillMonths(id, months) {
+  const sel = document.getElementById(id);
+  const first = sel.options[0].outerHTML;
+  sel.innerHTML = first + months.map(ym => `<option value="${ym}">${monthLabel(ym)}</option>`).join('');
+}
+
+// ── Live filters ──────────────────────────────────────────────────────────────
+function applyLiveFilters() {
+  const fP    = document.getElementById('lv-product').value;
+  const fB    = document.getElementById('lv-brand').value;
+  const fT    = document.getElementById('lv-type').value;
+  const fM    = document.getElementById('lv-month').value;     // 'YYYY-MM' or ''
+  const fFrom = document.getElementById('lv-date-from').value; // 'YYYY-MM-DD' or ''
+  const fTo   = document.getElementById('lv-date-to').value;
+  const dateFilterActive = !!(fM || fFrom || fTo);
+
+  // Date filter helper:
+  //   - If no date/month filter active → all rows pass
+  //   - If filter active AND row has no date → exclude
+  //   - If filter active AND row has date → check month + range
+  const passDate = (d) => {
+    if (!dateFilterActive) return true;
+    if (!d) return false;                          // date unknown → exclude when filter active
+    if (fM && d.slice(0, 7) !== fM) return false;  // month filter
+    if (fFrom && d < fFrom) return false;
+    if (fTo   && d > fTo)   return false;
+    return true;
+  };
+
+  // Filter in-house live rows
+  const inhouseLive = (RAW.influencers || [])
+    .filter(i => {
+      if (!i.liveLink || !String(i.liveLink).startsWith('http')) return false;
+      if (fP && i.product   !== fP) return false;
+      if (fB && i.brand     !== fB) return false;
+      if (!passDate(i.liveDate))    return false;
+      return true;
+    })
+    .map(i => ({ ...i, category: 'inhouse' }));
+
+  // Filter agency live rows — now also respect date filter
+  const agencyLive = (RAW.agencyInfluencers || [])
+    .filter(i => {
+      if (!i.liveLink || !String(i.liveLink).startsWith('http')) return false;
+      if (fP && i.product !== fP) return false;
+      if (fB && i.brand   !== fB) return false;
+      if (!passDate(i.liveDate))  return false;
+      return true;
+    })
+    .map(i => ({ ...i, category: 'agency' }));
+
+  if (fT === 'agency')       LV_FILTERED = agencyLive;
+  else if (fT === 'inhouse') LV_FILTERED = inhouseLive;
+  else                       LV_FILTERED = [...inhouseLive, ...agencyLive];
+
+  // Tab badge always matches visible table rows
+  document.getElementById('tab-live-count').textContent = LV_FILTERED.length;
+
+  renderLiveKPIs();
+  renderLiveCharts();
+  renderLiveTargets();
+  lvPage = 1;
+  renderLiveTable();
+}
+function resetLiveFilters() {
+  ['lv-product','lv-brand','lv-type','lv-month'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('lv-date-from').value = '';
+  document.getElementById('lv-date-to').value   = '';
+  applyLiveFilters();
+}
+
+// ── Orders filters ────────────────────────────────────────────────────────────
+function applyOrderFilters() {
+  const fP = document.getElementById('or-product').value;
+  const fB = document.getElementById('or-brand').value;
+  const fC = document.getElementById('or-poc').value;
+  const fM = document.getElementById('or-month').value; // 'YYYY-MM' or ''
+
+  OR_FILTERED = RAW.influencers.filter(i => {
+    if (fP && i.product !== fP) return false;
+    if (fB && i.brand   !== fB) return false;
+    if (fC && i.poc     !== fC) return false;
+    if (fM && (!i.liveDate || i.liveDate.slice(0, 7) !== fM)) return false;
+    return true;
+  });
+
+  document.getElementById('tab-orders-count').textContent = OR_FILTERED.length;
+  renderOrderKPIs();
+  renderPOCCards();
+}
+function resetOrderFilters() {
+  ['or-product','or-brand','or-poc','or-month'].forEach(id => document.getElementById(id).value = '');
+  applyOrderFilters();
+}
+
+function isOrderFiltered() {
+  return ['or-product','or-brand','or-poc','or-month'].some(id => document.getElementById(id).value !== '');
+}
+
+// ════════════════════════════════════════════════════════════
+// LIVE TAB RENDERS
+// ════════════════════════════════════════════════════════════
+function isLiveFiltered() {
+  return ['lv-product','lv-brand','lv-type','lv-month','lv-date-from','lv-date-to'].some(id => document.getElementById(id).value !== '');
+}
+
+function renderLiveKPIs() {
+  const k       = RAW.kpis;
+  const overall = RAW.overallTargets || {};
+  const fT = document.getElementById('lv-type').value;
+
+  // Always split LV_FILTERED by category — payouts are ALWAYS derived from filtered rows.
+  // This ensures product / brand / type filters all produce consistent numbers.
+  const ihRows  = LV_FILTERED.filter(i => i.category === 'inhouse');
+  const agRows  = LV_FILTERED.filter(i => i.category === 'agency');
+  const ttcRows = agRows.filter(i => i.agency === 'TTC');
+  const inkRows = agRows.filter(i => i.agency === 'INK REVENUE');
+  const sum = (arr, field) => arr.reduce((s, i) => s + (i[field] || 0), 0);
+
+  // ── Reels Gone Live KPI ──────────────────────────────────────────────────────
+  // Count: always match the table rows visible.
+  const actual  = LV_FILTERED.length;
+  const target  = fT === 'agency'  ? (overall.agencyReelTarget  || 660)
+                : fT === 'inhouse' ? (overall.inhouseReelTarget  || 400)
+                :                    (overall.totalReelTarget    || 1060);
+
+  const products = [...new Set(LV_FILTERED.map(i => i.product).filter(Boolean))];
+  document.getElementById('lv-kpi-live-actual').textContent = actual.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-live-target').textContent = '/ ' + target.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-influencers').textContent = actual;
+  document.getElementById('lv-kpi-skus').textContent        = products.length;
+
+  // ── Payout boxes — always computed from filtered rows ────────────────────────
+  // ihPay = 0 when agency-only view; agPay = 0 when inhouse-only view.
+  const ihPay  = fT === 'agency'  ? 0 : sum(ihRows,  'total');
+  const ihReel = fT === 'agency'  ? 0 : sum(ihRows,  'reelAmt');
+  const ihProd = fT === 'agency'  ? 0 : sum(ihRows,  'productAmt');
+  const agPay  = fT === 'inhouse' ? 0 : sum(agRows,  'total');
+  const agReel = fT === 'inhouse' ? 0 : sum(agRows,  'reelAmt');
+  const agProd = fT === 'inhouse' ? 0 : sum(agRows,  'productAmt');
+  const ttcPay = fT === 'inhouse' ? 0 : sum(ttcRows, 'total');
+  const inkPay = fT === 'inhouse' ? 0 : sum(inkRows, 'total');
+
+  document.getElementById('lv-kpi-payout-inhouse').textContent     = '₹' + ihPay.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-payout-inhouse-sub').textContent = '₹' + ihReel.toLocaleString('en-IN') + ' reel · ₹' + ihProd.toLocaleString('en-IN') + ' product';
+
+  document.getElementById('lv-kpi-payout-agency').textContent     = '₹' + agPay.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-payout-ttc').textContent        = '₹' + ttcPay.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-payout-ink').textContent        = '₹' + inkPay.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-payout-agency-sub').textContent = '₹' + agReel.toLocaleString('en-IN') + ' reel · ₹' + agProd.toLocaleString('en-IN') + ' product';
+
+  // ── Overall payout ───────────────────────────────────────────────────────────
+  const overallPay = ihPay + agPay;
+  document.getElementById('lv-kpi-payout-overall').textContent     = '₹' + overallPay.toLocaleString('en-IN');
+  document.getElementById('lv-kpi-payout-overall-sub').textContent =
+    fT === 'agency'  ? 'Agency only' :
+    fT === 'inhouse' ? 'In-house only' :
+    '🏠 ₹' + ihPay.toLocaleString('en-IN') + ' · 🏢 ₹' + agPay.toLocaleString('en-IN');
+}
+
+function renderLiveCharts() {
+  // Source: LV_FILTERED (already set to correct data — inhouse or agency — by applyLiveFilters)
+  // Product bar
+  destroyChart('lv-product');
+  const pCounts = {};
+  LV_FILTERED.forEach(i => { if (i.product) pCounts[i.product] = (pCounts[i.product]||0)+1; });
+  const sorted = Object.entries(pCounts).sort((a,b)=>b[1]-a[1]);
+  charts['lv-product'] = new Chart(document.getElementById('lv-chart-product'), {
+    type: 'bar',
+    data: { labels: sorted.map(([p])=>shortLabel(p)), datasets: [{ label: 'Reels', data: sorted.map(([,v])=>v), backgroundColor: sorted.map((_,i)=>GREEN_PAL[i%GREEN_PAL.length]), borderRadius: 6, borderSkipped: false }] },
+    options: barOpts('Reels')
+  });
+
+  // Brand donut
+  destroyChart('lv-brand');
+  const bCounts = {};
+  LV_FILTERED.forEach(i => { bCounts[i.brand] = (bCounts[i.brand]||0)+1; });
+  charts['lv-brand'] = new Chart(document.getElementById('lv-chart-brand'), {
+    type: 'doughnut',
+    data: { labels: Object.keys(bCounts), datasets: [{ data: Object.values(bCounts), backgroundColor: Object.keys(bCounts).map(b=>BRAND_COLS[b]||'#9ca3af'), borderWidth: 2, borderColor: '#fff' }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins: { legend: { position:'bottom', labels:{ font:{size:11}, padding:12 } }, tooltip:{ callbacks:{ label: ctx=>` ${ctx.label}: ${ctx.raw}` } } } }
+  });
+
+  // POC / Agency horizontal bar
+  destroyChart('lv-poc');
+  const cCounts = {};
+  LV_FILTERED.forEach(i => { const k = i.agency || i.poc; cCounts[k] = (cCounts[k]||0)+1; });
+  const sortedPOC = Object.entries(cCounts).sort((a,b)=>b[1]-a[1]);
+  charts['lv-poc'] = new Chart(document.getElementById('lv-chart-poc'), {
+    type: 'bar',
+    data: { labels: sortedPOC.map(([p])=>p), datasets: [{ label: 'Reels', data: sortedPOC.map(([,v])=>v), backgroundColor: POC_COLS, borderRadius: 6, borderSkipped: false }] },
+    options: { ...barOpts('Reels'), indexAxis: 'y' }
+  });
+}
+
+function renderLiveTargets() {
+  const overall           = RAW.overallTargets || {};
+  const agencyReelTarget  = overall.agencyReelTarget  || 660;
+  const inhouseReelTarget = overall.inhouseReelTarget || 400;
+  const totalReelTarget   = agencyReelTarget + inhouseReelTarget;
+
+  const fT = document.getElementById('lv-type').value;
+
+  // Real actuals from server
+  const agencyActuals  = RAW.kpis.agencyReelsLive  || 0;
+  const inhouseActuals = RAW.kpis.reelsLive         || 0;
+  const totalActuals   = RAW.kpis.combinedReelsLive || (agencyActuals + inhouseActuals);
+
+  const totalPct   = totalReelTarget  > 0 ? Math.min(Math.round(totalActuals  / totalReelTarget  * 100), 100) : 0;
+  const inhousePct = inhouseReelTarget > 0 ? Math.min(Math.round(inhouseActuals / inhouseReelTarget * 100), 100) : 0;
+
+  // ── Overall bar ──
+  document.getElementById('lv-overall-reel').innerHTML = `
+    <div style="padding:14px 18px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:.8rem;font-weight:700;color:#374151;">🎬 Overall Live Reels</span>
+        <span style="font-size:.82rem;font-weight:700;color:#111827;">${totalActuals.toLocaleString('en-IN')} <span style="color:#9ca3af;font-weight:500">/ ${totalReelTarget.toLocaleString('en-IN')}</span></span>
+      </div>
+      <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div></div>
+      <div style="font-size:.73rem;color:#6b7280;margin-top:4px;">${totalPct}% of combined target</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+      <!-- Agency card -->
+      <div style="padding:14px 18px;background:#faf5ff;border-radius:10px;border:1.5px solid #e9d5ff;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="font-size:.75rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;">🏢 Agency</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:1.5rem;font-weight:800;color:#111827;">${agencyActuals.toLocaleString('en-IN')}</span>
+          <span style="font-size:.8rem;color:#9ca3af;">/ ${agencyReelTarget} target</span>
+        </div>
+        <div class="ot-bar-bg" style="background:#ede9fe;"><div style="height:100%;width:${Math.min(Math.round(agencyActuals/agencyReelTarget*100),100)}%;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:4px;transition:width .5s;"></div></div>
+        <div style="font-size:.72rem;color:#7c3aed;margin-top:6px;font-weight:600;">${Math.min(Math.round(agencyActuals/agencyReelTarget*100),100)}% achieved</div>
+        <!-- TTC + INK REVENUE sub-split -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;">
+          <div style="background:#fff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 8px;">
+            <div style="font-size:.65rem;font-weight:700;color:#7c3aed;margin-bottom:2px;">TTC</div>
+            <div style="font-size:.85rem;font-weight:700;color:#111827;">${(RAW.kpis.ttcReelsLive||0)}</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 8px;">
+            <div style="font-size:.65rem;font-weight:700;color:#a78bfa;margin-bottom:2px;">Ink Revenue</div>
+            <div style="font-size:.85rem;font-weight:700;color:#111827;">${(RAW.kpis.inkReelsLive||0)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- In-house card -->
+      <div style="padding:14px 18px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="font-size:.75rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;">🏠 In-house Team</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:1.5rem;font-weight:800;color:#111827;">${inhouseActuals.toLocaleString('en-IN')}</span>
+          <span style="font-size:.8rem;color:#9ca3af;">/ ${inhouseReelTarget} target</span>
+        </div>
+        <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div></div>
+        <div style="font-size:.72rem;color:#15803d;margin-top:6px;font-weight:600;">${inhousePct}% achieved</div>
+      </div>
+    </div>`;
+
+  // ── Agency SKU targets vs actuals ─────────────────────────────────────────
+  const ttcTargets      = RAW.ttcSkuLiveTargets   || {};
+  const inkTargets      = RAW.inkSkuLiveTargets    || {};
+  const agencyActualsMap= RAW.agencySkuActuals     || {};
+  const ttcActualsMap   = RAW.ttcSkuActuals         || {};
+  const inkActualsMap   = RAW.inkSkuActuals         || {};
+  const selProd         = document.getElementById('lv-product').value;
+
+  const normCase = s => String(s||'').trim().toLowerCase();
+  // Case-insensitive lookup across map keys
+  const lookupActual = (map, key) =>
+    Object.entries(map).reduce((s,[k,v]) => s + (normCase(k)===normCase(key)?v:0), 0);
+
+  // All products that appear in agency targets or actuals
+  const allAgencyProducts = [...new Set([
+    ...Object.keys(ttcTargets),
+    ...Object.keys(inkTargets),
+    ...Object.keys(agencyActualsMap),
+  ])];
+
+  // One row per (agency, product) pair with data
+  const agencyTargetRows = [];
+  allAgencyProducts.forEach(key => {
+    if (selProd && normCase(key) !== normCase(selProd)) return;
+    const ttcT = ttcTargets[key] || 0;
+    const inkT = inkTargets[key] || 0;
+    const ttcA = lookupActual(ttcActualsMap, key);
+    const inkA = lookupActual(inkActualsMap, key);
+    if (ttcT > 0 || ttcA > 0) agencyTargetRows.push({ key, agency: 'TTC',         agencyColor: '#7c3aed', target: ttcT, actual: ttcA });
+    if (inkT > 0 || inkA > 0) agencyTargetRows.push({ key, agency: 'Ink Revenue', agencyColor: '#a78bfa', target: inkT, actual: inkA });
+  });
+  agencyTargetRows.sort((a,b) => (b.target - a.target) || (b.actual - a.actual));
+
+  let html = '';
+
+  if (agencyTargetRows.length > 0 && fT !== 'inhouse') {
+    const agencyTotal = Object.values(agencyActualsMap).reduce((s,v)=>s+v, 0);
+    const ttcTotal    = Object.values(ttcActualsMap).reduce((s,v)=>s+v, 0);
+    const inkTotal    = Object.values(inkActualsMap).reduce((s,v)=>s+v, 0);
+
+    html += `
+    <div style="margin-top:18px;padding-bottom:6px;border-bottom:2px solid #ede9fe;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:.85rem;font-weight:700;color:#7c3aed;">📦 Agency — Product-wise Targets vs Live</span>
+      <span style="font-size:.72rem;background:#f5f3ff;color:#7c3aed;border:1px solid #e9d5ff;padding:2px 8px;border-radius:10px;font-weight:600;">${agencyTotal} total · TTC ${ttcTotal} · Ink Revenue ${inkTotal}</span>
+    </div>
+    <div class="target-list">
+      ${agencyTargetRows.map(({ key, agency, agencyColor, target, actual }) => {
+        const isSelected = selProd && normCase(key) === normCase(selProd);
+        const pct = target > 0 ? Math.min(Math.round(actual / target * 100), 100) : (actual > 0 ? 100 : 0);
+        return `<div class="target-item" style="${isSelected?'background:#f5f3ff;border-radius:8px;padding:6px 8px;border:1.5px solid #e9d5ff;':''}">
+          <div class="target-header">
+            <span class="target-name">
+              ${isSelected?'▶ ':''}<span style="font-weight:700;">${key}</span>
+              <span style="font-size:.72rem;font-weight:600;color:${agencyColor};margin-left:5px;background:${agencyColor}18;border:1px solid ${agencyColor}44;padding:1px 7px;border-radius:8px;">${agency}</span>
+            </span>
+            <span class="target-nums">
+              <span style="color:${agencyColor};font-weight:700;">${actual}</span> / ${target||'—'}
+              <span style="color:#9ca3af;font-weight:400"> (${pct}%)</span>
+            </span>
+          </div>
+          <div class="progress-bar-bg" style="background:#ede9fe;">
+            <div class="progress-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${agencyColor},${agencyColor}99);"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // ── In-house section — actuals by product, canonical names now match ──────
+  const inhouseActualsMap = RAW.inhouseSkuActuals || {};
+  const inhouseActualEntries = Object.entries(inhouseActualsMap)
+    .filter(([key]) => !selProd || normCase(key) === normCase(selProd))
+    .sort((a, b) => b[1] - a[1]);
+
+  if (inhouseActualEntries.length > 0 && fT !== 'agency') {
+    const totalInhouse = isLiveFiltered()
+      ? inhouseActualEntries.reduce((s,[,v]) => s + v, 0)
+      : (RAW.kpis.reelsLive || inhouseActualEntries.reduce((s,[,v]) => s + v, 0));
+    html += `
+    <div style="margin-top:22px;padding-bottom:6px;border-bottom:2px solid #bbf7d0;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+      <span style="font-size:.85rem;font-weight:700;color:#15803d;">🏠 In-house — Product-wise Live</span>
+      <span style="font-size:.72rem;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 8px;border-radius:10px;font-weight:600;">${totalInhouse} reels total</span>
+    </div>
+    <div class="target-list">
+      ${inhouseActualEntries.map(([key, actual]) => {
+        const isSelected = selProd && normCase(key) === normCase(selProd);
+        const barPct     = totalInhouse > 0 ? Math.round(actual / totalInhouse * 100) : 0;
+        return `<div class="target-item" style="${isSelected?'background:#f0fdf4;border-radius:8px;padding:6px 8px;border:1.5px solid #86efac;':''}">
+          <div class="target-header">
+            <span class="target-name">${isSelected?'▶ ':''}${key}</span>
+            <span class="target-nums"><span>${actual}</span> reels &nbsp;<span style="color:#9ca3af;font-weight:400">(${barPct}% of total)</span></span>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${barPct}%;"></div></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  document.getElementById('lv-target-list').innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// ORDERS TAB RENDERS
+// ════════════════════════════════════════════════════════════
+function renderOrderKPIs() {
+  const filtered = isOrderFiltered();
+  const orders   = filtered ? OR_FILTERED.length : (RAW.kpis.totalOrders || OR_FILTERED.length);
+  document.getElementById('or-kpi-orders').textContent     = orders.toLocaleString('en-IN');
+  document.getElementById('or-kpi-orders-sub').textContent = filtered ? 'Filtered view' : 'Across all team members';
+}
+
+function renderOrderTargets() {
+  const filtered      = isOrderFiltered();
+  const pocOrders     = RAW.pocOrders || {};
+  const overall       = RAW.overallTargets || {};
+  const orderTarget   = 1015;
+  const agencyTarget  = 660;
+  const inhouseTarget = 400;
+
+  const agencyActual  = filtered ? OR_FILTERED.filter(i=>i.poc==='Priyanka').length : (pocOrders['Priyanka']||0);
+  const inhouseActual = filtered
+    ? OR_FILTERED.filter(i=>['Mohit','Hardev','Satyam'].includes(i.poc)).length
+    : ((pocOrders['Mohit']||0)+(pocOrders['Hardev']||0)+(pocOrders['Satyam']||0));
+  const totalActual   = agencyActual + inhouseActual;
+
+  const totalPct   = Math.min(Math.round(totalActual  /orderTarget  *100),100);
+  const agencyPct  = Math.min(Math.round(agencyActual /agencyTarget *100),100);
+  const inhousePct = Math.min(Math.round(inhouseActual/inhouseTarget*100),100);
+
+  document.getElementById('or-overall-targets').innerHTML = `
+    <div class="ot-card">
+      <div class="ot-label">🎬 Overall Reel Target</div>
+      <div class="ot-nums">${(filtered?OR_FILTERED.length:(overall.actualReels||0)).toLocaleString('en-IN')} <span>/ ${(overall.reelTarget||0).toLocaleString('en-IN')} target</span></div>
+      <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${Math.min(Math.round((filtered?OR_FILTERED.length:(overall.actualReels||0))/(overall.reelTarget||1)*100),100)}%;background:linear-gradient(90deg,#16a34a,#4ade80)"></div></div>
+      <div class="ot-pct">${Math.min(Math.round((filtered?OR_FILTERED.length:(overall.actualReels||0))/(overall.reelTarget||1)*100),100)}% achieved</div>
+    </div>
+    <div class="ot-card blue-card">
+      <div class="ot-label" style="color:#2563eb">🛒 Overall Order Target</div>
+      <div class="ot-nums">${totalActual.toLocaleString('en-IN')} <span>/ ${orderTarget.toLocaleString('en-IN')} target</span></div>
+      <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
+      <div class="ot-pct" style="color:#3b82f6">${totalPct}% achieved</div>
+      <div class="ot-split">
+        <div class="ot-split-item">
+          <div class="ot-split-label" style="color:#7c3aed">🏢 Agency (Priyanka)</div>
+          <div class="ot-split-num">${agencyActual} <span>/ ${agencyTarget}</span></div>
+          <div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${agencyPct}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
+          <div class="ot-split-pct" style="color:#7c3aed">${agencyPct}%</div>
+        </div>
+        <div class="ot-split-item">
+          <div class="ot-split-label" style="color:#0d9488">🏠 In-house Team</div>
+          <div class="ot-split-num">${inhouseActual} <span>/ ${inhouseTarget}</span></div>
+          <div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#0d9488,#34d399)"></div></div>
+          <div class="ot-split-pct" style="color:#0d9488">${inhousePct}%</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderPOCCards() {
+  const filtered    = isOrderFiltered();
+  const pocOrders   = RAW.pocOrders   || {};
+  const teamTargets = RAW.teamTargets || {};
+  const POC_ORDER   = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+
+  // Always count from OR_FILTERED when a filter is active; otherwise use pre-aggregated server counts
+  const filteredPocCounts = {};
+  OR_FILTERED.forEach(i => { filteredPocCounts[i.poc] = (filteredPocCounts[i.poc]||0)+1; });
+
+  document.getElementById('or-poc-cards').innerHTML = POC_ORDER.map(name => {
+    const orders = filtered ? (filteredPocCounts[name]||0) : (pocOrders[name]||0);
+    const target = Object.entries(teamTargets).find(([k]) => k.toLowerCase().startsWith(name.toLowerCase()))?.[1] || 0;
+    const pct    = target > 0 ? Math.min(Math.round(orders / target * 100), 100) : 0;
+    const isOver = target > 0 && orders >= target;
+    const barColor = isOver
+      ? 'background:linear-gradient(90deg,#16a34a,#4ade80)'
+      : 'background:linear-gradient(90deg,#3b82f6,#93c5fd)';
+    const roleLabel = name === 'Priyanka' ? 'Agency' : 'In-house';
+    return `<div class="poc-card">
+      <div class="poc-avatar">${name.charAt(0)}</div>
+      <div class="poc-name">${name}</div>
+      <div style="font-size:.7rem;color:#9ca3af;margin-bottom:6px">${roleLabel}</div>
+      <div class="poc-target">
+        <span>${orders.toLocaleString('en-IN')}</span>
+        ${target > 0 ? `<span class="poc-target-total"> / ${target.toLocaleString('en-IN')} target</span>` : ''}
+      </div>
+      ${target > 0 ? `
+      <div class="poc-prog-bg"><div class="poc-prog-fill" style="width:${pct}%;${barColor}"></div></div>
+      <div class="poc-pct" style="${isOver ? 'color:#16a34a;font-weight:700' : ''}">${pct}% achieved</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderSKUGrid() {
+  const skuData  = RAW.skuTargets || [];
+  const filtered = isOrderFiltered();
+  const selProd  = document.getElementById('or-product').value;
+
+  const filteredReels = {};
+  OR_FILTERED.forEach(i => { if (i.product) filteredReels[i.product] = (filteredReels[i.product]||0)+1; });
+
+  const visible = filtered && selProd
+    ? skuData.filter(s => s.liveKey === selProd || s.name === selProd)
+    : skuData;
+
+  document.getElementById('or-sku-grid').innerHTML = visible.map(sku => {
+    const actual    = filtered ? (filteredReels[sku.liveKey]||0) : sku.actualReels;
+    const reelPct   = sku.reelTarget  > 0 ? Math.min(Math.round(actual/sku.reelTarget *100),100) : 0;
+    const orderPct  = sku.orderTarget > 0 ? Math.min(Math.round(actual/sku.orderTarget*100),100) : 0;
+    return `<div class="sku-card">
+      <div class="sku-name"><div class="sku-dot"></div>${sku.name}</div>
+      <div class="sku-metrics">
+        <div class="sku-metric-box">
+          <div class="sku-metric-label">Reels Done</div>
+          <div class="sku-metric-val">${actual}</div>
+          <div class="sku-metric-target">Target: ${sku.reelTarget||'—'}</div>
+        </div>
+        <div class="sku-metric-box">
+          <div class="sku-metric-label">Orders Done</div>
+          <div class="sku-metric-val">${actual}</div>
+          <div class="sku-metric-target">Target: ${sku.orderTarget||'—'}</div>
+        </div>
+      </div>
+      ${sku.reelTarget>0?`<div class="sku-bar-row">
+        <div class="sku-bar-label"><span>Reels</span><span>${reelPct}%</span></div>
+        <div class="sku-bar-bg"><div class="sku-bar-fill green-bar" style="width:${reelPct}%"></div></div>
+      </div>`:''}
+      ${sku.orderTarget>0?`<div class="sku-bar-row">
+        <div class="sku-bar-label"><span>Orders</span><span>${orderPct}%</span></div>
+        <div class="sku-bar-bg"><div class="sku-bar-fill blue-bar" style="width:${orderPct}%"></div></div>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── Tables ────────────────────────────────────────────────────────────────────
+function sortLive(key) {
+  lvSort = { key, dir: lvSort.key===key ? -lvSort.dir : 1 };
+  lvPage = 1; renderLiveTable();
+}
+function sortOrders(key) {
+  orSort = { key, dir: orSort.key===key ? -orSort.dir : 1 };
+  orPage = 1; renderOrdersTable();
+}
+
+function renderLiveTable() {
+  const search = document.getElementById('lv-search').value.toLowerCase();
+
+  let data = LV_FILTERED.filter(i =>
+    !search || [i.username, i.product, i.brand, i.poc, i.agency].some(v => String(v||'').toLowerCase().includes(search))
+  );
+  data.sort((a,b) => {
+    const va=a[lvSort.key], vb=b[lvSort.key];
+    return (typeof va==='number' ? va-vb : String(va||'').localeCompare(String(vb||''))) * lvSort.dir;
+  });
+
+  renderTableBody('lv-table-body', 'lv-pagination', data, lvPage, p => { lvPage=p; renderLiveTable(); }, row => {
+    const isAgency = row.category === 'agency';
+    const catBadge = isAgency
+      ? `<span style="font-size:.72rem;background:#faf5ff;color:#7c3aed;border:1px solid #e9d5ff;padding:2px 8px;border-radius:10px;font-weight:600;">🏢 Agency</span>`
+      : `<span style="font-size:.72rem;background:#f0fdf4;color:#15803d;border:1px solid #86efac;padding:2px 8px;border-radius:10px;font-weight:600;">🏠 In-house</span>`;
+    const pocCell = isAgency
+      ? `<span style="font-size:.72rem;background:#f5f3ff;color:#7c3aed;border:1px solid #e9d5ff;padding:2px 8px;border-radius:10px;font-weight:600;">${row.agency||'—'}</span>`
+      : (row.poc||'—');
+    const usernameLink = isAgency
+      ? `<a href="${row.profileLink||'#'}" target="_blank" style="color:#7c3aed;font-weight:600;text-decoration:none;">@${row.username}</a>`
+      : `<a href="https://www.instagram.com/${row.username}/" target="_blank" style="color:#16a34a;font-weight:600;text-decoration:none;">@${row.username}</a>`;
+    return `
+      <td>${usernameLink}</td>
+      <td style="font-weight:500">${row.product||'—'}</td>
+      <td><span class="badge ${row.brand==='Kleenest'?'badge-kleenest':'badge-klenzmo'}">${row.brand||'—'}</span></td>
+      <td>${catBadge}</td>
+      <td>${pocCell}</td>
+      <td>${row.liveDate||'—'}</td>
+      <td>${row.views?row.views.toLocaleString('en-IN'):'—'}</td>
+      <td>${row.likes?row.likes.toLocaleString('en-IN'):'—'}</td>
+      <td>${row.liveLink?`<a href="${row.liveLink}" target="_blank" class="link-btn">▶ View</a>`:'—'}</td>
+    `;
+  });
+}
+
+function renderOrdersTable() {
+  const search = document.getElementById('or-search').value.toLowerCase();
+  let data = OR_FILTERED.filter(i =>
+    !search || [i.username,i.product,i.brand,i.poc,i.approval].some(v=>String(v).toLowerCase().includes(search))
+  );
+  data.sort((a,b) => {
+    const va=a[orSort.key], vb=b[orSort.key];
+    return (typeof va==='number' ? va-vb : String(va).localeCompare(String(vb))) * orSort.dir;
+  });
+  renderTableBody('or-table-body', 'or-pagination', data, orPage, p => { orPage=p; renderOrdersTable(); }, row => {
+    const isApproved = row.approval.toLowerCase().includes('approved');
+    return `
+      <td><a href="https://www.instagram.com/${row.username}/" target="_blank" style="color:#16a34a;font-weight:600;text-decoration:none;">@${row.username}</a></td>
+      <td style="font-weight:500">${row.product||'—'}</td>
+      <td><span class="badge ${row.brand==='Kleenest'?'badge-kleenest':'badge-klenzmo'}">${row.brand}</span></td>
+      <td>${row.poc}</td>
+      <td>${row.liveDate||'—'}</td>
+      <td style="font-weight:600">₹${row.reelAmt.toLocaleString('en-IN')}</td>
+      <td>₹${row.productAmt.toLocaleString('en-IN')}</td>
+      <td style="font-weight:700;color:#16a34a">₹${row.total.toLocaleString('en-IN')}</td>
+      <td><span class="badge ${isApproved?'badge-approved':'badge-pending'}">${isApproved?'✓ Approved':'⏳ Pending'}</span></td>
+      <td>${row.liveLink?`<a href="${row.liveLink}" target="_blank" class="link-btn">▶ View</a>`:'—'}</td>`;
+  });
+}
+
+function renderTableBody(tbodyId, pagId, data, page, goPage, rowFn) {
+  const totalPages = Math.ceil(data.length / PAGE_SIZE);
+  const pageData   = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  document.getElementById(tbodyId).innerHTML = pageData.map(row => `<tr>${rowFn(row)}</tr>`).join('');
+
+  const pag = document.getElementById(pagId);
+  if (totalPages <= 1) { pag.innerHTML = `<span class="page-info">${data.length} records</span>`; return; }
+  let pages = '';
+  for (let p=1; p<=totalPages; p++) {
+    if (p===1||p===totalPages||Math.abs(p-page)<=1) pages+=`<button class="page-btn ${p===page?'active':''}" onclick="(${goPage.toString()})(${p})">${p}</button>`;
+    else if (Math.abs(p-page)===2) pages+=`<span style="color:#9ca3af">…</span>`;
+  }
+  pag.innerHTML = `<span class="page-info">${data.length} records · Page ${page}/${totalPages}</span>
+    <button class="page-btn" onclick="(${goPage.toString()})(${Math.max(1,page-1)})">‹</button>${pages}
+    <button class="page-btn" onclick="(${goPage.toString()})(${Math.min(totalPages,page+1)})">›</button>`;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
+
+function barOpts(label) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${label}: ${ctx.raw}` } } },
+    scales: { y: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } }, x: { grid: { display: false }, ticks: { font: { size: 11 } } } }
+  };
+}
+
+function shortLabel(s) {
+  const m = {
+    'Washing Machine Powder':  'WM Powder',
+    'Washing Machine Liquid':  'WM Liquid',
+    'Washing Machine Tablet':  'WM Tablet',
+    'Kitchen Cleaner':         'Kitchen',
+    'Magic Eraser':            'Magic Eraser',
+    'Kleenest Bathroom Kit':   'KL Bath Kit',
+    'Copper and Brass Cleaner':'Cu & Brass',
+    'Klenzmo Bathroom Kit':    'Kz Bath Kit',
+    'Cleaning Trial Kit':      'Trial Kit',
+    'Metal Cleaner Kit':       'Metal Cleaner',
+    'Tile & Floor Cleaner':    'Tile & Floor',
+  };
+  return m[s] || (s.length > 14 ? s.slice(0, 13) + '…' : s);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>
