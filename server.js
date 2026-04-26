@@ -7,22 +7,22 @@ const app = express();
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Config ──────────────────────────────────────────────────────────────────
-const TENANT_ID     = 'b7ec02e9-bbbd-42f7-9a87-529c524b541c';
-const CLIENT_ID     = '96735fdd-f383-42e9-9cd5-f85f2ccdddcf';
-const CLIENT_SECRET = 'REDACTED_CLIENT_SECRET';
+// ── Config (all secrets via environment variables) ───────────────────────────
+const TENANT_ID     = process.env.TENANT_ID;
+const CLIENT_ID     = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
 // Main live sheet (priyanka's drive)
-const PRIYANKA_USER  = 'priyanka@kleenest.in';
-const LIVE_FILE_ID   = '01I5S75AMRWCD7BATFKZD3S2QT6KWNINU5';
-const AGENCY_FILE_ID = '01I5S75AMCVHK6UM4PXJHYMWSJNEFVJZYY';  // Agency_Sheet.xlsx (TTC + INK REVENUE)
+const PRIYANKA_USER  = process.env.PRIYANKA_USER  || 'priyanka@kleenest.in';
+const LIVE_FILE_ID   = process.env.LIVE_FILE_ID   || '01I5S75AMRWCD7BATFKZD3S2QT6KWNINU5';
+const AGENCY_FILE_ID = process.env.AGENCY_FILE_ID || '01I5S75AMCVHK6UM4PXJHYMWSJNEFVJZYY';
 
 // Individual order sheets (harmeet's drive)
-const HARMEET_USER   = 'harmeet@kleenest.in';
-const MOHIT_FILE_ID  = '01SI4WURI5JUACCCELQFF3YQHS5LEY5BUL';
-const HARDEV_FILE_ID = '01SI4WURPWNPRBPVDTHRGIQXZXI3RH2DRV';
-const SATYAM_FILE_ID = '01SI4WURNN6K7X3VGRBBA345MHU3WFADKB';
-const APRIL_PLAN_ID  = '01SI4WUROWDSIEW7TMSBEJ6RXUIHMPUGKZ';
+const HARMEET_USER   = process.env.HARMEET_USER   || 'harmeet@kleenest.in';
+const MOHIT_FILE_ID  = process.env.MOHIT_FILE_ID  || '01SI4WURI5JUACCCELQFF3YQHS5LEY5BUL';
+const HARDEV_FILE_ID = process.env.HARDEV_FILE_ID || '01SI4WURPWNPRBPVDTHRGIQXZXI3RH2DRV';
+const SATYAM_FILE_ID = process.env.SATYAM_FILE_ID || '01SI4WURNN6K7X3VGRBBA345MHU3WFADKB';
+const APRIL_PLAN_ID  = process.env.APRIL_PLAN_ID  || '01SI4WUROWDSIEW7TMSBEJ6RXUIHMPUGKZ';
 
 // ── Token Cache ──────────────────────────────────────────────────────────────
 let tokenCache = { token: null, expiresAt: 0 };
@@ -744,5 +744,10 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Kleenest Dashboard running on http://localhost:${PORT}`));
+// ── Start server locally; export for Vercel serverless ───────────────────────
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`Kleenest Dashboard running on http://localhost:${PORT}`));
+}
+
+module.exports = app;
