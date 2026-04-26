@@ -771,6 +771,7 @@ app.post('/api/metrics/start', async (req, res) => {
     );
     const j = await r.json();
     if (!j?.data?.id) return res.status(502).json({ error: 'Apify start failed', detail: j });
+    res.set('Cache-Control', 'no-store');
     res.json({ runId: j.data.id, datasetId: j.data.defaultDatasetId });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -790,6 +791,7 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
     const run = await runRes.json();
     const status = run?.data?.status;
 
+    res.set('Cache-Control', 'no-store');
     if (status !== 'SUCCEEDED') return res.json({ status: status || 'UNKNOWN' });
 
     // Run finished — fetch dataset items
