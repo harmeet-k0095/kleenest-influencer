@@ -1176,7 +1176,7 @@ async function fetchAndUpdateMetrics() {
   btn.textContent = '⏳ Fetching…';
   Object.assign(progress.style, { display: 'flex' });
 
-  const BATCH = 20;  // Apify handles 20 URLs per call comfortably
+  const BATCH = 50;  // Apify instagram-scraper handles 50 URLs in ~20-25s
   let done = 0;
 
   for (let i = 0; i < uniqueUrls.length; i += BATCH) {

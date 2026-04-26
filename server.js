@@ -758,14 +758,18 @@ app.post('/api/fetch-metrics', async (req, res) => {
 
   try {
     // Use Apify sync endpoint — runs actor and returns dataset items in one call.
-    // Actor: apify/instagram-post-scraper
-    // timeout=90s, memory=256MB keeps cost low for batches of 20
+    // Actor: apify/instagram-scraper — accepts directUrls for posts & reels
+    // timeout=90s, memory=512MB
     const apifyRes = await fetch(
-      `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=256`,
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=1024`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ directUrls: urls, resultsLimit: urls.length }),
+        body:    JSON.stringify({
+          directUrls:   urls,
+          resultsType:  'posts',
+          resultsLimit: urls.length,
+        }),
       }
     );
 
