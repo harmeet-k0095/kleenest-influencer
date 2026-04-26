@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
@@ -5,6 +6,7 @@ const path = require('path');
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Config (all secrets via environment variables) ───────────────────────────
@@ -740,6 +742,52 @@ app.get('/api/dashboard', async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/fetch-metrics — fetch Instagram metrics via Apify ───────────────
+// Body: { urls: ["https://www.instagram.com/reel/...", ...] }
+// Returns: [{ url, views, likes, comments }]
+app.post('/api/fetch-metrics', async (req, res) => {
+  const { urls } = req.body || {};
+  if (!Array.isArray(urls) || urls.length === 0) return res.json([]);
+
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured in environment' });
+
+  try {
+    // Use Apify sync endpoint — runs actor and returns dataset items in one call.
+    // Actor: apify/instagram-post-scraper
+    // timeout=90s, memory=256MB keeps cost low for batches of 20
+    const apifyRes = await fetch(
+      `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${token}&timeout=90&memory=256`,
+      {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ directUrls: urls, resultsLimit: urls.length }),
+      }
+    );
+
+    const text  = await apifyRes.text();
+    let   items;
+    try   { items = JSON.parse(text); }
+    catch { return res.status(502).json({ error: 'Apify returned invalid JSON', raw: text.slice(0, 300) }); }
+
+    if (!Array.isArray(items)) {
+      return res.status(502).json({ error: 'Apify error', detail: items });
+    }
+
+    const metrics = items.map(it => ({
+      url:      (it.url || it.inputUrl || '').split('?')[0].replace(/\/$/, ''),
+      views:    it.videoPlayCount ?? it.playCount ?? it.videoViewCount ?? 0,
+      likes:    it.likesCount     ?? it.likeCount  ?? 0,
+      comments: it.commentsCount  ?? it.commentCount ?? 0,
+    }));
+
+    res.json(metrics);
+  } catch (err) {
+    console.error('[fetch-metrics]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

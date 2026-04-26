@@ -359,7 +359,17 @@
           <div class="card-title">📋 Live Influencer Details</div>
           <div class="card-subtitle" style="margin-top:2px">Use the <strong>Type</strong> filter above to switch between In-house and Agency</div>
         </div>
-        <input class="search-box" id="lv-search" placeholder="🔍  Search influencer, product…" oninput="renderLiveTable()" />
+        <div style="display:flex;align-items:center;gap:10px">
+          <input class="search-box" id="lv-search" placeholder="🔍  Search influencer, product…" oninput="renderLiveTable()" />
+          <button id="refresh-metrics-btn" onclick="fetchAndUpdateMetrics()"
+            style="white-space:nowrap;padding:7px 14px;background:#f0fdf4;border:1.5px solid #86efac;color:#15803d;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:600;transition:all .2s">
+            🔄 Refresh Metrics
+          </button>
+        </div>
+      </div>
+      <div id="metrics-progress" style="display:none;padding:8px 0 4px;font-size:.8rem;color:#6b7280;align-items:center;gap:8px">
+        <div class="spinner" style="width:16px;height:16px;border-width:2px"></div>
+        <span id="metrics-progress-text">Fetching metrics from Instagram…</span>
       </div>
       <div class="table-wrap">
         <table>
@@ -372,6 +382,8 @@
             <th onclick="sortLive('liveDate')">Live Date</th>
             <th onclick="sortLive('views')">Views</th>
             <th onclick="sortLive('likes')">Likes</th>
+            <th onclick="sortLive('comments')">Comments</th>
+            <th onclick="sortLive('cpv')">CPV</th>
             <th>Reel Link</th>
           </tr></thead>
           <tbody id="lv-table-body"></tbody>
@@ -421,6 +433,7 @@
 let RAW = null;
 let LV_FILTERED = [];   // Live tab filtered data
 let OR_FILTERED = [];   // Orders tab filtered data
+let LIVE_METRICS = {};  // url (normalised) → { views, likes, comments } from Apify
 
 // Table sort state
 let lvSort = { key: 'liveDate', dir: -1 };
@@ -1033,6 +1046,17 @@ function renderLiveTable() {
   let data = LV_FILTERED.filter(i =>
     !search || [i.username, i.product, i.brand, i.poc, i.agency].some(v => String(v||'').toLowerCase().includes(search))
   );
+
+  // Merge live metrics from Apify into rows for sorting
+  data = data.map(row => {
+    const key = normaliseUrl(row.liveLink);
+    const m   = LIVE_METRICS[key];
+    if (!m) return row;
+    const views = m.views || row.views || 0;
+    const cpv   = views > 0 ? (row.total || 0) / views : null;
+    return { ...row, views, likes: m.likes ?? row.likes, comments: m.comments ?? row.comments, cpv };
+  });
+
   data.sort((a,b) => {
     const va=a[lvSort.key], vb=b[lvSort.key];
     return (typeof va==='number' ? va-vb : String(va||'').localeCompare(String(vb||''))) * lvSort.dir;
@@ -1040,6 +1064,9 @@ function renderLiveTable() {
 
   renderTableBody('lv-table-body', 'lv-pagination', data, lvPage, p => { lvPage=p; renderLiveTable(); }, row => {
     const isAgency = row.category === 'agency';
+    const key = normaliseUrl(row.liveLink);
+    const hasLiveMetrics = !!LIVE_METRICS[key];
+
     const catBadge = isAgency
       ? `<span style="font-size:.72rem;background:#faf5ff;color:#7c3aed;border:1px solid #e9d5ff;padding:2px 8px;border-radius:10px;font-weight:600;">🏢 Agency</span>`
       : `<span style="font-size:.72rem;background:#f0fdf4;color:#15803d;border:1px solid #86efac;padding:2px 8px;border-radius:10px;font-weight:600;">🏠 In-house</span>`;
@@ -1049,6 +1076,21 @@ function renderLiveTable() {
     const usernameLink = isAgency
       ? `<a href="${row.profileLink||'#'}" target="_blank" style="color:#7c3aed;font-weight:600;text-decoration:none;">@${row.username}</a>`
       : `<a href="https://www.instagram.com/${row.username}/" target="_blank" style="color:#16a34a;font-weight:600;text-decoration:none;">@${row.username}</a>`;
+
+    // CPV = total cost / views; colour-coded green if < ₹1, amber if < ₹5
+    let cpvCell = '—';
+    if (row.cpv !== null && row.cpv !== undefined) {
+      const cpvVal = row.cpv;
+      const cpvStr = cpvVal < 1 ? '₹' + cpvVal.toFixed(3) : '₹' + cpvVal.toFixed(2);
+      const cpvColor = cpvVal < 1 ? '#16a34a' : cpvVal < 5 ? '#d97706' : '#dc2626';
+      cpvCell = `<span style="font-weight:700;color:${cpvColor}">${cpvStr}</span>`;
+    }
+
+    // Dot indicator: green = live metrics fetched, grey = sheet data
+    const metricDot = hasLiveMetrics
+      ? `<span title="Live from Instagram" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;vertical-align:middle"></span>`
+      : '';
+
     return `
       <td>${usernameLink}</td>
       <td style="font-weight:500">${row.product||'—'}</td>
@@ -1056,8 +1098,10 @@ function renderLiveTable() {
       <td>${catBadge}</td>
       <td>${pocCell}</td>
       <td>${row.liveDate||'—'}</td>
-      <td>${row.views?row.views.toLocaleString('en-IN'):'—'}</td>
+      <td>${metricDot}${row.views?row.views.toLocaleString('en-IN'):'—'}</td>
       <td>${row.likes?row.likes.toLocaleString('en-IN'):'—'}</td>
+      <td>${row.comments?row.comments.toLocaleString('en-IN'):'—'}</td>
+      <td>${cpvCell}</td>
       <td>${row.liveLink?`<a href="${row.liveLink}" target="_blank" class="link-btn">▶ View</a>`:'—'}</td>
     `;
   });
@@ -1107,6 +1151,67 @@ function renderTableBody(tbodyId, pagId, data, page, goPage, rowFn) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
+
+// Normalise an Instagram URL for use as a LIVE_METRICS key
+// Strips query params, trailing slashes → canonical form
+function normaliseUrl(url) {
+  if (!url) return '';
+  return String(url).split('?')[0].replace(/\/$/, '').toLowerCase();
+}
+
+// ── Refresh Metrics via Apify ─────────────────────────────────────────────────
+async function fetchAndUpdateMetrics() {
+  const btn      = document.getElementById('refresh-metrics-btn');
+  const progress = document.getElementById('metrics-progress');
+  const progText = document.getElementById('metrics-progress-text');
+
+  // Collect all unique live links across ALL live rows (not just current page)
+  const allLive = [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])]
+    .filter(i => i.liveLink && String(i.liveLink).startsWith('http'));
+  const uniqueUrls = [...new Set(allLive.map(i => i.liveLink))];
+
+  if (!uniqueUrls.length) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Fetching…';
+  Object.assign(progress.style, { display: 'flex' });
+
+  const BATCH = 20;  // Apify handles 20 URLs per call comfortably
+  let done = 0;
+
+  for (let i = 0; i < uniqueUrls.length; i += BATCH) {
+    const batch = uniqueUrls.slice(i, i + BATCH);
+    progText.textContent = `Fetching metrics… ${Math.min(i + BATCH, uniqueUrls.length)} / ${uniqueUrls.length} posts`;
+
+    try {
+      const res  = await fetch('/api/fetch-metrics', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ urls: batch }),
+      });
+      const data = await res.json();
+
+      if (Array.isArray(data)) {
+        data.forEach(m => {
+          const key = normaliseUrl(m.url);
+          if (key) LIVE_METRICS[key] = { views: m.views, likes: m.likes, comments: m.comments };
+        });
+        done += data.length;
+      }
+    } catch (e) {
+      console.warn('Metrics batch failed:', e.message);
+    }
+
+    // Re-render table after each batch so user sees results stream in
+    renderLiveTable();
+  }
+
+  progText.textContent = `✅ Updated metrics for ${done} posts`;
+  setTimeout(() => { progress.style.display = 'none'; }, 3000);
+
+  btn.disabled    = false;
+  btn.textContent = '🔄 Refresh Metrics';
+}
 
 function barOpts(label) {
   return {
