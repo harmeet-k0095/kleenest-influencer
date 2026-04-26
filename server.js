@@ -746,22 +746,19 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-// ── POST /api/fetch-metrics — fetch Instagram metrics via Apify ───────────────
-// Body: { urls: ["https://www.instagram.com/reel/...", ...] }
-// Returns: [{ url, views, likes, comments }]
-app.post('/api/fetch-metrics', async (req, res) => {
+// ── POST /api/metrics/start — kick off an Apify run (returns instantly) ───────
+// Body: { urls: [...] }
+// Returns: { runId, datasetId }
+app.post('/api/metrics/start', async (req, res) => {
   const { urls } = req.body || {};
-  if (!Array.isArray(urls) || urls.length === 0) return res.json([]);
+  if (!Array.isArray(urls) || urls.length === 0) return res.json({ runId: null });
 
   const token = process.env.APIFY_TOKEN;
-  if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured in environment' });
+  if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
   try {
-    // Use Apify sync endpoint — runs actor and returns dataset items in one call.
-    // Actor: apify/instagram-scraper — accepts directUrls for posts & reels
-    // timeout=90s, memory=512MB
-    const apifyRes = await fetch(
-      `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&timeout=120&memory=1024`,
+    const r = await fetch(
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${token}&memory=1024`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -772,26 +769,45 @@ app.post('/api/fetch-metrics', async (req, res) => {
         }),
       }
     );
+    const j = await r.json();
+    if (!j?.data?.id) return res.status(502).json({ error: 'Apify start failed', detail: j });
+    res.json({ runId: j.data.id, datasetId: j.data.defaultDatasetId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const text  = await apifyRes.text();
-    let   items;
-    try   { items = JSON.parse(text); }
-    catch { return res.status(502).json({ error: 'Apify returned invalid JSON', raw: text.slice(0, 300) }); }
+// ── GET /api/metrics/result/:runId — poll status; return items when done ──────
+// Returns: { status: 'RUNNING'|'SUCCEEDED'|'FAILED', items?: [...] }
+app.get('/api/metrics/result/:runId', async (req, res) => {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
-    if (!Array.isArray(items)) {
-      return res.status(502).json({ error: 'Apify error', detail: items });
-    }
+  try {
+    const runRes = await fetch(
+      `https://api.apify.com/v2/actor-runs/${req.params.runId}?token=${token}`
+    );
+    const run = await runRes.json();
+    const status = run?.data?.status;
 
-    const metrics = items.map(it => ({
+    if (status !== 'SUCCEEDED') return res.json({ status: status || 'UNKNOWN' });
+
+    // Run finished — fetch dataset items
+    const datasetId = run.data.defaultDatasetId;
+    const itemsRes  = await fetch(
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&clean=true`
+    );
+    const items = await itemsRes.json();
+
+    const metrics = (Array.isArray(items) ? items : []).map(it => ({
       url:      (it.url || it.inputUrl || '').split('?')[0].replace(/\/$/, ''),
       views:    it.videoPlayCount ?? it.playCount ?? it.videoViewCount ?? 0,
       likes:    it.likesCount     ?? it.likeCount  ?? 0,
       comments: it.commentsCount  ?? it.commentCount ?? 0,
     }));
 
-    res.json(metrics);
+    res.json({ status: 'SUCCEEDED', items: metrics });
   } catch (err) {
-    console.error('[fetch-metrics]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

@@ -1159,56 +1159,74 @@ function normaliseUrl(url) {
   return String(url).split('?')[0].replace(/\/$/, '').toLowerCase();
 }
 
-// ── Refresh Metrics via Apify ─────────────────────────────────────────────────
+// ── Refresh Metrics via Apify (async — fits within Vercel's 10s limit) ────────
 async function fetchAndUpdateMetrics() {
   const btn      = document.getElementById('refresh-metrics-btn');
   const progress = document.getElementById('metrics-progress');
   const progText = document.getElementById('metrics-progress-text');
 
-  // Collect all unique live links across ALL live rows (not just current page)
-  const allLive = [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])]
-    .filter(i => i.liveLink && String(i.liveLink).startsWith('http'));
-  const uniqueUrls = [...new Set(allLive.map(i => i.liveLink))];
+  // All unique live links (strip query params before sending to Apify)
+  const uniqueUrls = [...new Set(
+    [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])]
+      .filter(i => i.liveLink && String(i.liveLink).startsWith('http'))
+      .map(i => i.liveLink.split('?')[0])
+  )];
 
   if (!uniqueUrls.length) return;
 
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = '⏳ Fetching…';
   Object.assign(progress.style, { display: 'flex' });
 
-  const BATCH = 50;  // Apify instagram-scraper handles 50 URLs in ~20-25s
+  const BATCH = 50;
   let done = 0;
 
   for (let i = 0; i < uniqueUrls.length; i += BATCH) {
-    const batch = uniqueUrls.slice(i, i + BATCH);
-    progText.textContent = `Fetching metrics… ${Math.min(i + BATCH, uniqueUrls.length)} / ${uniqueUrls.length} posts`;
+    const batch    = uniqueUrls.slice(i, i + BATCH);
+    const batchNum = Math.floor(i / BATCH) + 1;
+    const batchEnd = Math.min(i + BATCH, uniqueUrls.length);
+    progText.textContent = `Starting batch ${batchNum}… (${batchEnd}/${uniqueUrls.length} posts)`;
 
     try {
-      const res  = await fetch('/api/fetch-metrics', {
+      // 1️⃣ Start Apify run — returns instantly with runId
+      const startRes = await fetch('/api/metrics/start', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ urls: batch }),
       });
-      const data = await res.json();
+      const { runId } = await startRes.json();
+      if (!runId) throw new Error('No runId returned');
 
-      if (Array.isArray(data)) {
-        data.forEach(m => {
+      // 2️⃣ Poll every 5s until SUCCEEDED
+      let items = null;
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise(r => setTimeout(r, 5000));
+        const elapsed = (attempt + 1) * 5;
+        progText.textContent = `Batch ${batchNum} running… ${elapsed}s elapsed (${batchEnd}/${uniqueUrls.length} posts)`;
+
+        const poll = await fetch(`/api/metrics/result/${runId}`);
+        const data = await poll.json();
+
+        if (data.status === 'SUCCEEDED') { items = data.items; break; }
+        if (data.status === 'FAILED' || data.status === 'ABORTED') break;
+      }
+
+      // 3️⃣ Merge into LIVE_METRICS and re-render table
+      if (Array.isArray(items)) {
+        items.forEach(m => {
           const key = normaliseUrl(m.url);
           if (key) LIVE_METRICS[key] = { views: m.views, likes: m.likes, comments: m.comments };
         });
-        done += data.length;
+        done += items.length;
+        renderLiveTable();
       }
     } catch (e) {
-      console.warn('Metrics batch failed:', e.message);
+      console.warn('Metrics batch error:', e.message);
     }
-
-    // Re-render table after each batch so user sees results stream in
-    renderLiveTable();
   }
 
   progText.textContent = `✅ Updated metrics for ${done} posts`;
-  setTimeout(() => { progress.style.display = 'none'; }, 3000);
-
+  setTimeout(() => { progress.style.display = 'none'; }, 4000);
   btn.disabled    = false;
   btn.textContent = '🔄 Refresh Metrics';
 }
