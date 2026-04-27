@@ -118,6 +118,7 @@ const AGENCY_PRODUCT_NORM = {
   // ── Bathroom Kits ────────────────────────────────────────────────────────
   'kleenest bathroom kit':           'Kleenest Bathroom Kit',
   'kleenest bathroom  kit':          'Kleenest Bathroom Kit',  // double-space variant
+  'kleenest bathrooom kit':          'Kleenest Bathroom Kit',  // 3-o typo variant
   'tc+bc kit':                       'Kleenest Bathroom Kit',
   'tc + bc kit':                     'Kleenest Bathroom Kit',
   'klenzmo bathroom kit':            'Klenzmo Bathroom Kit',
@@ -125,7 +126,11 @@ const AGENCY_PRODUCT_NORM = {
   // ── Tile & Floor ─────────────────────────────────────────────────────────
   'klenzmo floor & tile cleaner':    'Tile & Floor Cleaner',
   'klenzmo floor and tile cleaner':  'Tile & Floor Cleaner',
+  'klenzmo tile cleaner new':        'Tile & Floor Cleaner',
   'tile & floor cleaner':            'Tile & Floor Cleaner',
+  'tile& floor cleaner':             'Tile & Floor Cleaner',  // no-space variant
+  'floor & tile cleaner':            'Tile & Floor Cleaner',
+  'floor and tile cleaner':          'Tile & Floor Cleaner',
   'tile and floor cleaner':          'Tile & Floor Cleaner',
 
   // ── Copper / Metal ───────────────────────────────────────────────────────
@@ -224,6 +229,27 @@ function countOrdersFromSheet(values, statusValues) {
     r[usernameIdx] && String(r[usernameIdx]).trim() &&
     statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())
   ).length;
+}
+
+// ── Count orders by SKU from an individual IS sheet ───────────────────────────
+// Returns { productName: count } for rows matching the given statuses
+function countOrdersBySkuFromSheet(values, statusValues) {
+  if (!values || values.length < 2) return {};
+  const headers = values[0];
+  const rows    = values.slice(1);
+  const statusIdx   = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
+  const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
+  const productIdx  = headers.findIndex(h => /PRODUCT.?NAME/i.test(String(h)));
+  if (statusIdx < 0 || usernameIdx < 0 || productIdx < 0) return {};
+  const skuMap = {};
+  rows.forEach(r => {
+    if (!r[usernameIdx] || !String(r[usernameIdx]).trim()) return;
+    if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return;
+    const raw = String(r[productIdx] || '').trim();
+    const sku = normAgencyProduct(raw) || raw || 'Unknown';
+    skuMap[sku] = (skuMap[sku] || 0) + 1;
+  });
+  return skuMap;
 }
 
 // ── /api/debug/sheets — list all worksheet tabs in both key files ────────────
@@ -380,7 +406,7 @@ app.get('/api/dashboard', async (req, res) => {
       safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange`),
       safeGet(`${hmBase}/${MOHIT_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
       safeGet(`${hmBase}/${HARDEV_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
-      safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20Creators%20')/usedRange`),
+      safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Team%20Targets')/usedRange`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Monthy%20target')/usedRange`),
       graphGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Overview')/usedRange`),
@@ -474,28 +500,27 @@ app.get('/api/dashboard', async (req, res) => {
     }
 
     // ── Team Targets — parse from Overview sheet ─────────────────────────────
-    // Overview rows 12-14 (0-indexed) contain: col0=name, col1=order target
-    // col2=label (e.g. "Agency (Priyanka)"), col3=agency go-live target
+    // Overview "Orders Placed - In-house Targets" section has:
+    //   Mohit: 300, Satyam: 200, Hardev: 200, Priyanka: 100
+    // NOTE: Priyanka = 100 orders placed target (not 660 — that's agency live reels, a different KPI)
     const overviewValues = overviewRaw.values || [];
     const teamTargets = {
-      // Hardcoded fallbacks from Overview sheet "Targets given to team" section
       Mohit:    300,
       Satyam:   200,
       Hardev:   200,
-      Priyanka: 660,
+      Priyanka: 100,
     };
-    // Try to override with live sheet data if the structure matches
+    // Override with live values: scan for "Orders Placed - In-house Targets" section header
+    let inOrdersSection = false;
     overviewValues.forEach(row => {
-      const name = normPOC(String(row[0] || '').trim());
-      const num  = Number(row[1]);
-      if (['Mohit','Hardev','Satyam'].includes(name) && num > 0) {
-        teamTargets[name] = num;
-      }
-      // Agency (Priyanka) target from col2/col3
-      const label3 = String(row[2] || '').trim().toLowerCase();
-      const num3   = Number(row[3]);
-      if (label3.includes('priyanka') && num3 > 0) {
-        teamTargets['Priyanka'] = num3;
+      const label = String(row[0] || '').trim();
+      if (label.toLowerCase().includes('orders placed - in-house')) { inOrdersSection = true; return; }
+      if (inOrdersSection) {
+        const name = normPOC(label);
+        const num  = Number(row[1]);
+        if (['Mohit', 'Hardev', 'Satyam', 'Priyanka'].includes(name) && num > 0) {
+          teamTargets[name] = num;
+        }
       }
     });
 
@@ -507,6 +532,58 @@ app.get('/api/dashboard', async (req, res) => {
       Satyam:   countOrdersFromSheet(satyamRaw.values, ORDER_STATUSES),
       Priyanka: influencers.filter(i => i.poc === 'Priyanka').length,
     };
+
+    // ── SKU-wise orders per POC ───────────────────────────────────────────────
+    const pocSkuOrders = {
+      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,  ORDER_STATUSES),
+      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values, ORDER_STATUSES),
+      Satyam:   countOrdersBySkuFromSheet(satyamRaw.values, ORDER_STATUSES),
+      Priyanka: {},   // Priyanka's orders come from the live sheet (influencers array)
+    };
+    // Priyanka SKU orders: count from influencers
+    influencers.filter(i => i.poc === 'Priyanka').forEach(inf => {
+      const sku = inf.product || 'Unknown';
+      pocSkuOrders.Priyanka[sku] = (pocSkuOrders.Priyanka[sku] || 0) + 1;
+    });
+
+    // ── SKU Order Targets — from Overview rows 19-20 ──────────────────────────
+    // row19: header row with SKU names, row20: corresponding target numbers
+    // Canonical map from sheet names → canonical SKU names
+    const SKU_ORDER_TARGET_NORM = {
+      'magic eraser':              'Magic Eraser',
+      'descale powder':            'Washing Machine Powder',
+      'descale liquid':            'Washing Machine Liquid',
+      'descale tablet':            'Washing Machine Tablet',
+      'tc+bc kit':                 'Kleenest Bathroom Kit',
+      'tc + bc kit':               'Kleenest Bathroom Kit',
+      'trial kit':                 'Cleaning Trial Kit',
+      'metal cleaner':             'Metal Cleaner Kit',
+      'kitchen cleaner':           'Kitchen Cleaner',
+      'klenzmo tile cleaner new':  'Tile & Floor Cleaner',
+      'klenzmo floor & tile cleaner': 'Tile & Floor Cleaner',
+    };
+    const skuOrderTargets = {};   // canonical SKU name → target order count
+    let skuHeaderRow = null, skuTargetRow = null;
+    for (let ri = 0; ri < overviewValues.length; ri++) {
+      const row = overviewValues[ri];
+      const cell0 = String(row[0] || '').trim().toLowerCase();
+      if (cell0 === 'magic eraser' || cell0 === 'descale powder') {
+        // This is the SKU header row
+        skuHeaderRow = row;
+        skuTargetRow = overviewValues[ri + 1] || [];
+        break;
+      }
+    }
+    if (skuHeaderRow && skuTargetRow) {
+      skuHeaderRow.forEach((name, i) => {
+        if (!name) return;
+        const key = String(name).trim().toLowerCase();
+        if (key === 'total orders placed' || key === 'total') return;
+        const canonical = SKU_ORDER_TARGET_NORM[key] || String(name).trim();
+        const target    = Number(skuTargetRow[i]) || 0;
+        if (target > 0) skuOrderTargets[canonical] = (skuOrderTargets[canonical] || 0) + target;
+      });
+    }
 
     // ── Aggregates ───────────────────────────────────────────────────────────
     const productMap = {};
@@ -684,14 +761,15 @@ app.get('/api/dashboard', async (req, res) => {
     });
 
     const overallReelTarget  = skuTargets.reduce((s, x) => s + x.reelTarget, 0);
-    // Reel live targets: Agency 660 + In-house 400 = 1060
+    // Reel live targets: Agency 660 + In-house 450 = 1110
     const agencyReelTarget   = 660;
-    const inhouseReelTarget  = 400;
+    const inhouseReelTarget  = 450;
     const totalReelTarget    = agencyReelTarget + inhouseReelTarget;
-    // Order targets: Agency (Priyanka) 660 + In-house 400 = 1015
-    const overallOrderTarget = 1015;
-    const agencyOrderTarget  = 660;
-    const inhouseOrderTarget = 400;
+    // Order targets (from Overview): Mohit 300 + Satyam 200 + Hardev 200 + Priyanka 100 = 800 (in-house)
+    const inhouseOrderTarget = Object.values(teamTargets).reduce((s, v) => s + v, 0);
+    // Overall SKU order target = sum of product-wise targets (1020)
+    const overallOrderTarget = Object.values(skuOrderTargets).reduce((s, v) => s + v, 0) || 1020;
+    const agencyOrderTarget  = overallOrderTarget - inhouseOrderTarget;
     const overallActualReels = influencers.length;
 
     res.json({
@@ -737,6 +815,8 @@ app.get('/api/dashboard', async (req, res) => {
       overallTargets: { reelTarget: overallReelTarget, agencyReelTarget, inhouseReelTarget, totalReelTarget, orderTarget: overallOrderTarget, agencyOrderTarget, inhouseOrderTarget, actualReels: overallActualReels, totalOrders },
       teamTargets,
       pocOrders,
+      pocSkuOrders,
+      skuOrderTargets,
       influencers,
       lastUpdated:  new Date().toISOString(),
     });

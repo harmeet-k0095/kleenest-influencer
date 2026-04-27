@@ -424,6 +424,25 @@
       <div class="poc-grid" id="or-poc-cards"></div>
     </div>
 
+    <!-- SKU-wise Orders -->
+    <div class="card" style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+        <div class="section-title" style="margin:0">📦 SKU-wise Orders Placed</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:.8rem;color:#6b7280;font-weight:500">Filter by POC:</label>
+          <select id="or-sku-poc" onchange="renderSKUGrid()"
+            style="font-size:.8rem;padding:5px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer">
+            <option value="">All POCs</option>
+            <option value="Mohit">Mohit</option>
+            <option value="Hardev">Hardev</option>
+            <option value="Satyam">Satyam</option>
+            <option value="Priyanka">Priyanka</option>
+          </select>
+        </div>
+      </div>
+      <div id="or-sku-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px"></div>
+    </div>
+
   </div><!-- /panel-orders -->
 
 </main>
@@ -623,6 +642,7 @@ function applyOrderFilters() {
   document.getElementById('tab-orders-count').textContent = OR_FILTERED.length;
   renderOrderKPIs();
   renderPOCCards();
+  renderSKUGrid();
 }
 function resetOrderFilters() {
   ['or-product','or-brand','or-poc','or-month'].forEach(id => document.getElementById(id).value = '');
@@ -989,43 +1009,53 @@ function renderPOCCards() {
 }
 
 function renderSKUGrid() {
-  const skuData  = RAW.skuTargets || [];
-  const filtered = isOrderFiltered();
-  const selProd  = document.getElementById('or-product').value;
+  const skuOrderTargets = RAW.skuOrderTargets || {};
+  const pocSkuOrders    = RAW.pocSkuOrders    || {};
+  const selPoc          = (document.getElementById('or-sku-poc') || {}).value || '';
 
-  const filteredReels = {};
-  OR_FILTERED.forEach(i => { if (i.product) filteredReels[i.product] = (filteredReels[i.product]||0)+1; });
+  // All canonical SKU names — union of targets + actuals
+  const allSkus = [...new Set([
+    ...Object.keys(skuOrderTargets),
+    ...Object.values(pocSkuOrders).flatMap(m => Object.keys(m)),
+  ])].sort();
 
-  const visible = filtered && selProd
-    ? skuData.filter(s => s.liveKey === selProd || s.name === selProd)
-    : skuData;
+  // Compute actuals: sum across selected POC(s)
+  const getActual = (sku) => {
+    const pocs = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+    return pocs.reduce((s, p) => s + ((pocSkuOrders[p] || {})[sku] || 0), 0);
+  };
 
-  document.getElementById('or-sku-grid').innerHTML = visible.map(sku => {
-    const actual    = filtered ? (filteredReels[sku.liveKey]||0) : sku.actualReels;
-    const reelPct   = sku.reelTarget  > 0 ? Math.min(Math.round(actual/sku.reelTarget *100),100) : 0;
-    const orderPct  = sku.orderTarget > 0 ? Math.min(Math.round(actual/sku.orderTarget*100),100) : 0;
-    return `<div class="sku-card">
-      <div class="sku-name"><div class="sku-dot"></div>${sku.name}</div>
-      <div class="sku-metrics">
-        <div class="sku-metric-box">
-          <div class="sku-metric-label">Reels Done</div>
-          <div class="sku-metric-val">${actual}</div>
-          <div class="sku-metric-target">Target: ${sku.reelTarget||'—'}</div>
-        </div>
-        <div class="sku-metric-box">
-          <div class="sku-metric-label">Orders Done</div>
-          <div class="sku-metric-val">${actual}</div>
-          <div class="sku-metric-target">Target: ${sku.orderTarget||'—'}</div>
-        </div>
+  // Per-POC breakdown for tooltip display
+  const pocBreakdown = (sku) =>
+    ['Mohit','Hardev','Satyam','Priyanka']
+      .map(p => { const v = (pocSkuOrders[p]||{})[sku]||0; return v ? `${p}: ${v}` : ''; })
+      .filter(Boolean).join(' · ');
+
+  document.getElementById('or-sku-grid').innerHTML = allSkus.map(sku => {
+    const target  = skuOrderTargets[sku] || 0;
+    const actual  = getActual(sku);
+    const pct     = target > 0 ? Math.min(Math.round(actual / target * 100), 100) : 0;
+    const isOver  = target > 0 && actual >= target;
+    const barCol  = isOver
+      ? 'background:linear-gradient(90deg,#16a34a,#4ade80)'
+      : 'background:linear-gradient(90deg,#3b82f6,#93c5fd)';
+    const breakdown = pocBreakdown(sku);
+
+    return `<div class="sku-card" title="${breakdown || 'No orders yet'}">
+      <div class="sku-name" style="font-size:.8rem;font-weight:600;color:#1f2937;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${isOver?'#16a34a':'#3b82f6'};flex-shrink:0"></div>
+        ${sku}
       </div>
-      ${sku.reelTarget>0?`<div class="sku-bar-row">
-        <div class="sku-bar-label"><span>Reels</span><span>${reelPct}%</span></div>
-        <div class="sku-bar-bg"><div class="sku-bar-fill green-bar" style="width:${reelPct}%"></div></div>
-      </div>`:''}
-      ${sku.orderTarget>0?`<div class="sku-bar-row">
-        <div class="sku-bar-label"><span>Orders</span><span>${orderPct}%</span></div>
-        <div class="sku-bar-bg"><div class="sku-bar-fill blue-bar" style="width:${orderPct}%"></div></div>
-      </div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <span style="font-size:1.4rem;font-weight:700;color:${isOver?'#16a34a':'#1f2937'}">${actual}</span>
+        ${target > 0 ? `<span style="font-size:.75rem;color:#6b7280">/ ${target} target</span>` : '<span style="font-size:.75rem;color:#9ca3af">No target</span>'}
+      </div>
+      ${target > 0 ? `
+      <div style="background:#f3f4f6;border-radius:6px;height:6px;overflow:hidden;margin-bottom:4px">
+        <div style="height:100%;border-radius:6px;width:${pct}%;${barCol};transition:width .4s"></div>
+      </div>
+      <div style="font-size:.7rem;color:${isOver?'#16a34a':'#6b7280'};font-weight:${isOver?'700':'400'}">${pct}% achieved</div>` : ''}
+      ${breakdown && !selPoc ? `<div style="font-size:.65rem;color:#9ca3af;margin-top:5px">${breakdown}</div>` : ''}
     </div>`;
   }).join('');
 }
