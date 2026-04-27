@@ -340,10 +340,6 @@
         <div class="card-title mb16">🏷️ Brand Split</div>
         <div class="chart-wrap"><canvas id="lv-chart-brand"></canvas></div>
       </div>
-      <div class="card">
-        <div class="card-title mb16">👤 POC-wise Reels</div>
-        <div class="chart-wrap"><canvas id="lv-chart-poc"></canvas></div>
-      </div>
     </div>
 
     <!-- Reel Targets -->
@@ -774,16 +770,6 @@ function renderLiveCharts() {
     options: { responsive:true, maintainAspectRatio:false, plugins: { legend: { position:'bottom', labels:{ font:{size:11}, padding:12 } }, tooltip:{ callbacks:{ label: ctx=>` ${ctx.label}: ${ctx.raw}` } } } }
   });
 
-  // POC / Agency horizontal bar
-  destroyChart('lv-poc');
-  const cCounts = {};
-  LV_FILTERED.forEach(i => { const k = i.agency || i.poc; cCounts[k] = (cCounts[k]||0)+1; });
-  const sortedPOC = Object.entries(cCounts).sort((a,b)=>b[1]-a[1]);
-  charts['lv-poc'] = new Chart(document.getElementById('lv-chart-poc'), {
-    type: 'bar',
-    data: { labels: sortedPOC.map(([p])=>p), datasets: [{ label: 'Reels', data: sortedPOC.map(([,v])=>v), backgroundColor: POC_COLS, borderRadius: 6, borderSkipped: false }] },
-    options: { ...barOpts('Reels'), indexAxis: 'y' }
-  });
 }
 
 function renderLiveTargets() {
