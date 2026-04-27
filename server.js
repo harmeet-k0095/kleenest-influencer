@@ -254,6 +254,68 @@ function countOrdersBySkuFromSheet(values, statusValues) {
   return skuMap;
 }
 
+// ── /api/debug/inhouse-amounts — raw product/reel/total amounts from live sheet ──
+app.get('/api/debug/inhouse-amounts', async (req, res) => {
+  try {
+    const prBase = `/users/${PRIYANKA_USER}/drive/items/${LIVE_FILE_ID}/workbook/worksheets`;
+    const LIVE_TAB_NAMES = ['Live Inhouse', 'Live In-house', 'Live I', 'Live Sheet', 'Sheet1', 'Sheet2', 'SHeet 2'];
+    let raw = { values: [] };
+    for (const name of LIVE_TAB_NAMES) {
+      const r = await graphGet(`${prBase}('${encodeURIComponent(name)}')/usedRange`).catch(() => ({}));
+      if (r.values && r.values.length > 1) { raw = r; break; }
+    }
+    const values  = raw.values || [];
+    const headers = values[0] || [];
+    const rows    = values.slice(1);
+
+    const col         = kw => headers.findIndex(h => String(h).trim().toUpperCase() === kw.toUpperCase());
+    const colIncludes = kw => headers.findIndex(h => String(h).trim().toUpperCase().includes(kw.toUpperCase()));
+    const liveIdx    = colIncludes('LIVE LINK');
+    const userIdx    = col('USERNAME');
+    const prodAmtIdx = col('PRODUCT AMOUNT');
+    const reelAmtIdx = col('REEL AMOUNT');
+    const totalIdx   = col('TOTAL');
+
+    const isSocial = link => {
+      const u = String(link || '').trim();
+      return u.includes('instagram.com') || u.includes('youtube.com') || u.includes('youtu.be');
+    };
+
+    const liveRows = rows.filter(r => isSocial(r[liveIdx]));
+
+    // Collect raw values (before any parsing)
+    const rawAmounts = liveRows.map((r, i) => ({
+      row:        i + 2,
+      username:   String(r[userIdx] || '').slice(0, 25),
+      rawProduct: r[prodAmtIdx],   // raw cell value
+      rawReel:    r[reelAmtIdx],
+      rawTotal:   r[totalIdx],
+      typeProduct: typeof r[prodAmtIdx],
+    }));
+
+    const zeroProduct = rawAmounts.filter(r => {
+      const v = r.rawProduct;
+      return v === null || v === undefined || v === '' || v === 0;
+    });
+
+    // Totals using different parse strategies
+    const sumNumber     = rawAmounts.reduce((s, r) => s + (Number(r.rawProduct) || 0), 0);
+    const sumParseFloat = rawAmounts.reduce((s, r) => s + (parseFloat(String(r.rawProduct || '').replace(/[₹,\s]/g, '')) || 0), 0);
+
+    res.json({
+      headers,
+      liveRowCount:    liveRows.length,
+      zeroProductCount: zeroProduct.length,
+      sumUsingNumber:   sumNumber,
+      sumUsingParseAmount: sumParseFloat,
+      zeroProductRows:  zeroProduct.slice(0, 15),
+      allRows:          rawAmounts,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/sheets — list all worksheet tabs in both key files ────────────
 app.get('/api/debug/sheets', async (req, res) => {
   try {
@@ -671,16 +733,17 @@ app.get('/api/dashboard', async (req, res) => {
     const totalPayout    = approved.reduce((s, i) => s + i.total, 0);
     const uniqueProducts = [...new Set(influencers.map(i => i.product).filter(Boolean))];
 
-    // ── Live reels payout — sum over influencers with social live links ──────
-    // Use the parsed influencers array (with parseAmount applied) so amounts
-    // match exactly what the client displays. Social links only (Instagram / YouTube).
+    // ── Live reels payout — computed from ALL raw rows with social live links ──
+    // Using raw rows (not filtered influencers) so we include every row that has
+    // a live link, even rows excluded from influencers due to missing username,
+    // Excel errors, or excluded POCs. parseAmount handles ₹-prefixed strings.
     let liveReelsReelAmt    = 0;
     let liveReelsProductAmt = 0;
-    influencers.forEach(inf => {
-      const link = String(inf.liveLink || '').trim();
+    rows.forEach(r => {
+      const link = String(r[idx.liveLink] || '').trim();
       if (!link.includes('instagram.com') && !link.includes('youtube.com') && !link.includes('youtu.be')) return;
-      liveReelsReelAmt    += inf.reelAmt;
-      liveReelsProductAmt += inf.productAmt;
+      liveReelsReelAmt    += parseAmount(r[idx.reelAmt]);
+      liveReelsProductAmt += parseAmount(r[idx.productAmt]);
     });
     const liveReelsPayout = liveReelsReelAmt + liveReelsProductAmt;
 

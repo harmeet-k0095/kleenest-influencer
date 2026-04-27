@@ -698,16 +698,22 @@ function renderLiveKPIs() {
   document.getElementById('lv-kpi-influencers').textContent = actual;
   document.getElementById('lv-kpi-skus').textContent        = products.length;
 
-  // ── Payout boxes — always computed from filtered rows ────────────────────────
-  // ihPay = 0 when agency-only view; agPay = 0 when inhouse-only view.
-  const ihPay  = fT === 'agency'  ? 0 : sum(ihRows,  'total');
-  const ihReel = fT === 'agency'  ? 0 : sum(ihRows,  'reelAmt');
-  const ihProd = fT === 'agency'  ? 0 : sum(ihRows,  'productAmt');
-  const agPay  = fT === 'inhouse' ? 0 : sum(agRows,  'total');
-  const agReel = fT === 'inhouse' ? 0 : sum(agRows,  'reelAmt');
-  const agProd = fT === 'inhouse' ? 0 : sum(agRows,  'productAmt');
-  const ttcPay = fT === 'inhouse' ? 0 : sum(ttcRows, 'total');
-  const inkPay = fT === 'inhouse' ? 0 : sum(inkRows, 'total');
+  // ── Payout boxes ─────────────────────────────────────────────────────────────
+  // When NO filter is active, use server-computed KPI values which are derived
+  // from ALL raw live rows (including rows excluded from influencers due to missing
+  // usernames/products). This ensures the totals match the raw sheet sums.
+  // When a filter IS active, fall back to computing from LV_FILTERED.
+  const filtered = isLiveFiltered();
+  const kpis = RAW.kpis || {};
+
+  const ihPay  = fT === 'agency'  ? 0 : (filtered ? sum(ihRows, 'total')    : kpis.liveReelsPayout    || sum(ihRows, 'total'));
+  const ihReel = fT === 'agency'  ? 0 : (filtered ? sum(ihRows, 'reelAmt')  : kpis.liveReelsReelAmt   || sum(ihRows, 'reelAmt'));
+  const ihProd = fT === 'agency'  ? 0 : (filtered ? sum(ihRows, 'productAmt'): kpis.liveReelsProductAmt || sum(ihRows, 'productAmt'));
+  const agPay  = fT === 'inhouse' ? 0 : (filtered ? sum(agRows, 'total')    : kpis.agencyReelsPayout   || sum(agRows, 'total'));
+  const agReel = fT === 'inhouse' ? 0 : (filtered ? sum(agRows, 'reelAmt')  : kpis.agencyReelsReelAmt  || sum(agRows, 'reelAmt'));
+  const agProd = fT === 'inhouse' ? 0 : (filtered ? sum(agRows, 'productAmt'): kpis.agencyReelsProductAmt || sum(agRows, 'productAmt'));
+  const ttcPay = fT === 'inhouse' ? 0 : (filtered ? sum(ttcRows,'total')    : kpis.ttcReelsPayout      || sum(ttcRows, 'total'));
+  const inkPay = fT === 'inhouse' ? 0 : (filtered ? sum(inkRows,'total')    : kpis.inkReelsPayout      || sum(inkRows, 'total'));
 
   document.getElementById('lv-kpi-payout-inhouse').textContent     = '₹' + ihPay.toLocaleString('en-IN');
   document.getElementById('lv-kpi-payout-inhouse-sub').textContent = '₹' + ihReel.toLocaleString('en-IN') + ' reel · ₹' + ihProd.toLocaleString('en-IN') + ' product';
