@@ -951,8 +951,9 @@ function renderLiveTargets() {
 // ORDERS TAB RENDERS
 // ════════════════════════════════════════════════════════════
 function renderOrderKPIs() {
-  const filtered = isOrderFiltered();
-  const orders   = filtered ? OR_FILTERED.length : (RAW.kpis.totalOrders || OR_FILTERED.length);
+  const filtered   = isOrderFiltered();
+  const pocTotal   = Object.values(RAW.pocOrders || {}).reduce((s, v) => s + v, 0);
+  const orders     = filtered ? OR_FILTERED.length : (pocTotal || RAW.kpis.totalOrders || OR_FILTERED.length);
   document.getElementById('or-kpi-orders').textContent     = orders.toLocaleString('en-IN');
   document.getElementById('or-kpi-orders-sub').textContent = filtered ? 'Filtered view' : 'Across all team members';
 }
