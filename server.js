@@ -15,9 +15,11 @@ const CLIENT_ID     = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
 // Main live sheet (priyanka's drive)
-const PRIYANKA_USER  = process.env.PRIYANKA_USER  || 'priyanka@kleenest.in';
-const LIVE_FILE_ID   = process.env.LIVE_FILE_ID   || '01I5S75AMRWCD7BATFKZD3S2QT6KWNINU5';
-const AGENCY_FILE_ID = process.env.AGENCY_FILE_ID || '01I5S75AMCVHK6UM4PXJHYMWSJNEFVJZYY';
+const PRIYANKA_USER   = process.env.PRIYANKA_USER   || 'priyanka@kleenest.in';
+const LIVE_FILE_ID    = process.env.LIVE_FILE_ID    || '01I5S75AMRWCD7BATFKZD3S2QT6KWNINU5';
+const AGENCY_FILE_ID  = process.env.AGENCY_FILE_ID  || '01I5S75AMCVHK6UM4PXJHYMWSJNEFVJZYY';
+// Priyanka's dedicated order sheet (Tile & Floor Cleaner orders)
+const PRIYANKA_TFC_ID = process.env.PRIYANKA_TFC_ID || '01I5S75AIEWB4M6G7HNJFYN6AIPX5OROKD';
 
 // Individual order sheets (harmeet's drive)
 const HARMEET_USER   = process.env.HARMEET_USER   || 'harmeet@kleenest.in';
@@ -397,10 +399,12 @@ app.get('/api/dashboard', async (req, res) => {
 
     const agBase = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
 
+    const priyankaTfcBase = `/users/${PRIYANKA_USER}/drive/items/${PRIYANKA_TFC_ID}/workbook/worksheets`;
+
     const [
       liveRaw, targetRaw,
       mohitRaw, hardevRaw, satyamRaw, teamTargetsRaw, monthlyTargetRaw,
-      overviewRaw, ttcRaw, inkRaw,
+      overviewRaw, ttcRaw, inkRaw, priyankaTfcRaw,
     ] = await Promise.all([
       fetchLiveTab(),
       safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange`),
@@ -412,6 +416,7 @@ app.get('/api/dashboard', async (req, res) => {
       graphGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Overview')/usedRange`),
       safeGet(`${agBase}('TTC')/usedRange`),           // Agency: TTC
       safeGet(`${agBase}('INK%20REVENUE')/usedRange`), // Agency: Ink Revenue
+      safeGet(`${priyankaTfcBase}('Sheet1')/usedRange`), // Priyanka's Tile & Floor Cleaner orders
     ]);
 
     // ── Parse Live Sheet ─────────────────────────────────────────────────────
@@ -510,7 +515,9 @@ app.get('/api/dashboard', async (req, res) => {
       Hardev:   200,
       Priyanka: 100,
     };
-    // Override with live values: scan for "Orders Placed - In-house Targets" section header
+    // Override with live values from Overview "Orders Placed - In-house Targets" section.
+    // NOTE: Only read Mohit/Hardev/Satyam from the sheet — Priyanka's cell is a live formula
+    // (=COUNTA) that returns her actual count, not her target of 100.
     let inOrdersSection = false;
     overviewValues.forEach(row => {
       const label = String(row[0] || '').trim();
@@ -518,7 +525,7 @@ app.get('/api/dashboard', async (req, res) => {
       if (inOrdersSection) {
         const name = normPOC(label);
         const num  = Number(row[1]);
-        if (['Mohit', 'Hardev', 'Satyam', 'Priyanka'].includes(name) && num > 0) {
+        if (['Mohit', 'Hardev', 'Satyam'].includes(name) && num > 0) {
           teamTargets[name] = num;
         }
       }
@@ -527,24 +534,19 @@ app.get('/api/dashboard', async (req, res) => {
     // ── Orders placed per POC from individual sheets ──────────────────────────
     const ORDER_STATUSES = ['order place', 'order placed', 'live'];
     const pocOrders = {
-      Mohit:    countOrdersFromSheet(mohitRaw.values,  ORDER_STATUSES),
-      Hardev:   countOrdersFromSheet(hardevRaw.values, ORDER_STATUSES),
-      Satyam:   countOrdersFromSheet(satyamRaw.values, ORDER_STATUSES),
-      Priyanka: influencers.filter(i => i.poc === 'Priyanka').length,
+      Mohit:    countOrdersFromSheet(mohitRaw.values,      ORDER_STATUSES),
+      Hardev:   countOrdersFromSheet(hardevRaw.values,     ORDER_STATUSES),
+      Satyam:   countOrdersFromSheet(satyamRaw.values,     ORDER_STATUSES),
+      Priyanka: countOrdersFromSheet(priyankaTfcRaw.values, ORDER_STATUSES),
     };
 
     // ── SKU-wise orders per POC ───────────────────────────────────────────────
     const pocSkuOrders = {
-      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,  ORDER_STATUSES),
-      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values, ORDER_STATUSES),
-      Satyam:   countOrdersBySkuFromSheet(satyamRaw.values, ORDER_STATUSES),
-      Priyanka: {},   // Priyanka's orders come from the live sheet (influencers array)
+      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,       ORDER_STATUSES),
+      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values,      ORDER_STATUSES),
+      Satyam:   countOrdersBySkuFromSheet(satyamRaw.values,      ORDER_STATUSES),
+      Priyanka: countOrdersBySkuFromSheet(priyankaTfcRaw.values, ORDER_STATUSES),
     };
-    // Priyanka SKU orders: count from influencers
-    influencers.filter(i => i.poc === 'Priyanka').forEach(inf => {
-      const sku = inf.product || 'Unknown';
-      pocSkuOrders.Priyanka[sku] = (pocSkuOrders.Priyanka[sku] || 0) + 1;
-    });
 
     // ── SKU Order Targets — from Overview rows 19-20 ──────────────────────────
     // row19: header row with SKU names, row20: corresponding target numbers
