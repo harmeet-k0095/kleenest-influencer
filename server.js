@@ -283,33 +283,43 @@ app.get('/api/debug/inhouse-amounts', async (req, res) => {
 
     const liveRows = rows.filter(r => isSocial(r[liveIdx]));
 
-    // Collect raw values (before any parsing)
-    const rawAmounts = liveRows.map((r, i) => ({
-      row:        i + 2,
-      username:   String(r[userIdx] || '').slice(0, 25),
-      rawProduct: r[prodAmtIdx],   // raw cell value
-      rawReel:    r[reelAmtIdx],
-      rawTotal:   r[totalIdx],
-      typeProduct: typeof r[prodAmtIdx],
-    }));
-
-    const zeroProduct = rawAmounts.filter(r => {
-      const v = r.rawProduct;
-      return v === null || v === undefined || v === '' || v === 0;
+    // All rows — collect raw values before any parsing
+    const allRowsData = rows.map((r, i) => {
+      const link = String(r[liveIdx] || '').trim();
+      const isSocial = link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
+      const hasAnyLink = link.startsWith('http') || link.startsWith('https');
+      return {
+        row:        i + 2,
+        username:   String(r[userIdx] || '').slice(0, 30),
+        liveLink:   link.slice(0, 80),
+        linkType:   !link ? 'NONE' : isSocial ? 'social' : hasAnyLink ? 'other_http' : 'non_http',
+        rawProduct: r[prodAmtIdx],
+        parsedProduct: parseAmount(r[prodAmtIdx]),
+        rawReel:    r[reelAmtIdx],
+        parsedReel: parseAmount(r[reelAmtIdx]),
+      };
     });
 
-    // Totals using different parse strategies
-    const sumNumber     = rawAmounts.reduce((s, r) => s + (Number(r.rawProduct) || 0), 0);
-    const sumParseFloat = rawAmounts.reduce((s, r) => s + (parseFloat(String(r.rawProduct || '').replace(/[₹,\s]/g, '')) || 0), 0);
+    const socialRows   = allRowsData.filter(r => r.linkType === 'social');
+    const otherHttpRows= allRowsData.filter(r => r.linkType === 'other_http');
+    const nonHttpRows  = allRowsData.filter(r => r.linkType === 'non_http');
+    const noLinkRows   = allRowsData.filter(r => r.linkType === 'NONE');
+
+    const sumSocial    = socialRows.reduce((s, r) => s + r.parsedProduct, 0);
+    const sumOtherHttp = otherHttpRows.reduce((s, r) => s + r.parsedProduct, 0);
+    const sumAll       = allRowsData.reduce((s, r) => s + r.parsedProduct, 0);
 
     res.json({
       headers,
-      liveRowCount:    liveRows.length,
-      zeroProductCount: zeroProduct.length,
-      sumUsingNumber:   sumNumber,
-      sumUsingParseAmount: sumParseFloat,
-      zeroProductRows:  zeroProduct.slice(0, 15),
-      allRows:          rawAmounts,
+      totalRows:      rows.length,
+      socialRows:     socialRows.length,
+      otherHttpRows:  otherHttpRows.length,
+      noLinkRows:     noLinkRows.length,
+      sumSocialProduct:    sumSocial,
+      sumOtherHttpProduct: sumOtherHttp,
+      sumAllProduct:       sumAll,
+      otherHttpDetails: otherHttpRows.map(r => ({ row: r.row, username: r.username, link: r.liveLink, product: r.parsedProduct, reel: r.parsedReel })),
+      zeroProductSocialRows: socialRows.filter(r => r.parsedProduct === 0).map(r => ({ row: r.row, username: r.username, rawProduct: r.rawProduct })),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -733,17 +743,19 @@ app.get('/api/dashboard', async (req, res) => {
     const totalPayout    = approved.reduce((s, i) => s + i.total, 0);
     const uniqueProducts = [...new Set(influencers.map(i => i.product).filter(Boolean))];
 
-    // ── Live reels payout — computed from ALL raw rows with social live links ──
-    // Using raw rows (not filtered influencers) so we include every row that has
-    // a live link, even rows excluded from influencers due to missing username,
-    // Excel errors, or excluded POCs. parseAmount handles ₹-prefixed strings.
+    // ── Live reels payout ────────────────────────────────────────────────────
+    // Reel Amount  : sum only rows with a social live link (Instagram / YouTube)
+    //               — payment is only made when a reel is actually posted.
+    // Product Amount: sum ALL rows with a non-zero product amount, regardless of
+    //               live status — products are sent before the reel goes live, so
+    //               the cost is incurred for every influencer who received a product.
     let liveReelsReelAmt    = 0;
     let liveReelsProductAmt = 0;
     rows.forEach(r => {
       const link = String(r[idx.liveLink] || '').trim();
-      if (!link.includes('instagram.com') && !link.includes('youtube.com') && !link.includes('youtu.be')) return;
-      liveReelsReelAmt    += parseAmount(r[idx.reelAmt]);
-      liveReelsProductAmt += parseAmount(r[idx.productAmt]);
+      const isSocial = link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
+      if (isSocial) liveReelsReelAmt += parseAmount(r[idx.reelAmt]);
+      liveReelsProductAmt += parseAmount(r[idx.productAmt]);   // all rows
     });
     const liveReelsPayout = liveReelsReelAmt + liveReelsProductAmt;
 
