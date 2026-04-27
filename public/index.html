@@ -430,7 +430,7 @@
         <div class="section-title" style="margin:0">📦 SKU-wise Orders Placed</div>
         <div style="display:flex;align-items:center;gap:8px">
           <label style="font-size:.8rem;color:#6b7280;font-weight:500">Filter by POC:</label>
-          <select id="or-sku-poc" onchange="renderSKUGrid()"
+          <select id="or-sku-poc" onchange="renderSKUGrid(); renderSKUChart();"
             style="font-size:.8rem;padding:5px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer">
             <option value="">All POCs</option>
             <option value="Mohit">Mohit</option>
@@ -439,6 +439,10 @@
             <option value="Priyanka">Priyanka</option>
           </select>
         </div>
+      </div>
+      <!-- SKU bar chart -->
+      <div style="position:relative;height:260px;margin-bottom:24px">
+        <canvas id="or-chart-sku"></canvas>
       </div>
       <div id="or-sku-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px"></div>
     </div>
@@ -655,6 +659,7 @@ function applyOrderFilters() {
   renderOrderKPIs();
   renderPOCCards();
   renderSKUGrid();
+  renderSKUChart();
 }
 function resetOrderFilters() {
   ['or-product','or-brand','or-poc','or-month'].forEach(id => document.getElementById(id).value = '');
@@ -1091,6 +1096,58 @@ function renderSKUGrid() {
       ${bars}
     </div>`;
   }).filter(Boolean).join('');
+}
+
+function renderSKUChart() {
+  const pocSkuOrders = RAW.pocSkuOrders || {};
+  const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
+  const selSku       = (document.getElementById('or-product') || {}).value || '';
+  const POCS         = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+
+  // Aggregate total orders per SKU
+  const allSkusRaw = [...new Set(Object.values(pocSkuOrders).flatMap(m => Object.keys(m)))].sort();
+  const allSkus    = selSku ? allSkusRaw.filter(s => s === selSku) : allSkusRaw;
+
+  // Aggregate per-SKU totals, skip zero-order SKUs
+  const labels = [], data = [];
+  allSkus.forEach((sku, i) => {
+    const t = POCS.reduce((s, p) => s + ((pocSkuOrders[p] || {})[sku] || 0), 0);
+    if (t > 0) { labels.push(sku); data.push(t); }
+  });
+
+  // Sort descending
+  const sorted = labels.map((l, i) => ({ l, d: data[i] })).sort((a, b) => b.d - a.d);
+
+  destroyChart('or-sku');
+  const ctx = document.getElementById('or-chart-sku');
+  if (!ctx || !sorted.length) return;
+
+  charts['or-sku'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(x => x.l),
+      datasets: [{
+        label: 'Orders',
+        data: sorted.map(x => x.d),
+        backgroundColor: sorted.map((_, i) => GREEN_PAL[i % GREEN_PAL.length]),
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} orders` } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 }, stepSize: 1 } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
 }
 
 // ── Tables ────────────────────────────────────────────────────────────────────
