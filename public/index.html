@@ -719,7 +719,9 @@ function renderLiveKPIs() {
   // Only shown in the unfiltered in-house view (server KPI, not computed from LV_FILTERED)
   const advProd = (fT !== 'agency' && !filtered) ? (kpis.advanceProductAmt || 0) : 0;
 
-  document.getElementById('lv-kpi-payout-inhouse').textContent     = '₹' + ihPay.toLocaleString('en-IN');
+  const ihPayTotal = ihPay + advProd;   // live payout + advance product
+
+  document.getElementById('lv-kpi-payout-inhouse').textContent     = '₹' + ihPayTotal.toLocaleString('en-IN');
   document.getElementById('lv-kpi-payout-inhouse-sub').textContent =
     '₹' + ihReel.toLocaleString('en-IN') + ' reel · ₹' + ihProd.toLocaleString('en-IN') + ' product';
 
@@ -739,12 +741,12 @@ function renderLiveKPIs() {
   document.getElementById('lv-kpi-payout-agency-sub').textContent = '₹' + agReel.toLocaleString('en-IN') + ' reel · ₹' + agProd.toLocaleString('en-IN') + ' product';
 
   // ── Overall payout ───────────────────────────────────────────────────────────
-  const overallPay = ihPay + agPay;
+  const overallPay = ihPayTotal + agPay;
   document.getElementById('lv-kpi-payout-overall').textContent     = '₹' + overallPay.toLocaleString('en-IN');
   document.getElementById('lv-kpi-payout-overall-sub').textContent =
     fT === 'agency'  ? 'Agency only' :
     fT === 'inhouse' ? 'In-house only' :
-    '🏠 ₹' + ihPay.toLocaleString('en-IN') + ' · 🏢 ₹' + agPay.toLocaleString('en-IN');
+    '🏠 ₹' + ihPayTotal.toLocaleString('en-IN') + ' · 🏢 ₹' + agPay.toLocaleString('en-IN');
 }
 
 function renderLiveCharts() {
