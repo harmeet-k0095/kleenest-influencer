@@ -336,6 +336,46 @@ app.get('/api/debug/resolve-share', async (req, res) => {
   }
 });
 
+// ── /api/debug/ink — raw Ink Revenue sheet inspection ────────────────────────
+app.get('/api/debug/ink', async (req, res) => {
+  try {
+    const agBase = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
+    const raw = await graphGet(`${agBase}('INK%20REVENUE')/usedRange`);
+    const values = raw.values || [];
+    const headers = values[0] || [];
+    const rows = values.slice(1);
+
+    const colIncludes = kw => headers.findIndex(h => String(h).trim().toUpperCase().includes(kw.toUpperCase()));
+    const col = kw => headers.findIndex(h => String(h).trim().toUpperCase() === kw.toUpperCase());
+    const liveIdx = colIncludes('LIVE LINK');
+    const userIdx = col('USERNAME');
+    const productIdx = col('PRODUCT NAME');
+
+    const allRows = rows.map((r, i) => ({
+      row: i + 2,
+      username: r[userIdx] || '',
+      product: r[productIdx] || '',
+      liveLink: r[liveIdx] || '',
+      hasLink: String(r[liveIdx] || '').startsWith('http'),
+    }));
+
+    const withLink = allRows.filter(r => r.hasLink);
+    const withLinkNoUser = allRows.filter(r => r.hasLink && !String(r.username).trim());
+
+    res.json({
+      totalRows: rows.length,
+      headers,
+      liveColIndex: liveIdx,
+      userColIndex: userIdx,
+      withLiveLink: withLink.length,
+      withLinkButNoUsername: withLinkNoUser.length,
+      withLinkRows: withLink.map(r => ({ row: r.row, username: r.username, product: r.product, liveLink: r.liveLink.slice(0,80) })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/list-folder — list Priyanka subfolder + search xlsx ───────────
 app.get('/api/debug/list-folder', async (req, res) => {
   try {
@@ -701,7 +741,13 @@ app.get('/api/dashboard', async (req, res) => {
     const inkInfluencers = parseAgencySheet(inkRaw.values,  'INK REVENUE');
     const agencyInfluencers = [...ttcInfluencers, ...inkInfluencers];
 
-    const isLive = inf => inf.liveLink && String(inf.liveLink).trim().startsWith('http');
+    // Count rows with Instagram or YouTube Shorts links as "live reels".
+    // Amazon affiliate links and other non-social URLs in the Live Link column are excluded.
+    const isLiveSocial = url => {
+      const u = String(url || '').trim();
+      return u.includes('instagram.com') || u.includes('youtube.com') || u.includes('youtu.be');
+    };
+    const isLive = inf => inf.liveLink && isLiveSocial(inf.liveLink);
 
     // Per-agency live counts
     const ttcReelsLive    = ttcInfluencers.filter(isLive).length;

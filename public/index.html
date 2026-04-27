@@ -532,7 +532,9 @@ function populateFilters() {
   fillMonths('lv-month', months);
 
   const pocs       = [...new Set((RAW.influencers||[]).map(i => i.poc).filter(p => p && p !== 'Unassigned'))].sort();
-  const orProducts = [...new Set((RAW.influencers||[]).map(i => i.product).filter(Boolean))].sort();
+  // Include products from pocSkuOrders (e.g. Priyanka's Tile & Floor Cleaner) that aren't in the live sheet
+  const skuOrderProducts = Object.values(RAW.pocSkuOrders||{}).flatMap(m => Object.keys(m));
+  const orProducts = [...new Set([...(RAW.influencers||[]).map(i => i.product).filter(Boolean), ...skuOrderProducts])].sort();
   const orBrands   = [...new Set((RAW.influencers||[]).map(i => i.brand).filter(Boolean))].sort();
 
   // Order months — from inhouse rows (which have dates)
@@ -589,10 +591,13 @@ function applyLiveFilters() {
     return true;
   };
 
+  // Only count Instagram or YouTube links as live — excludes Amazon affiliate URLs etc.
+  const isSocialLink = url => { const u = String(url||'').trim(); return u.includes('instagram.com') || u.includes('youtube.com') || u.includes('youtu.be'); };
+
   // Filter in-house live rows
   const inhouseLive = (RAW.influencers || [])
     .filter(i => {
-      if (!i.liveLink || !String(i.liveLink).startsWith('http')) return false;
+      if (!i.liveLink || !isSocialLink(i.liveLink)) return false;
       if (fP && i.product   !== fP) return false;
       if (fB && i.brand     !== fB) return false;
       if (!passDate(i.liveDate))    return false;
@@ -600,10 +605,10 @@ function applyLiveFilters() {
     })
     .map(i => ({ ...i, category: 'inhouse' }));
 
-  // Filter agency live rows — no date = include (dates not populated in agency sheet yet)
+  // Filter agency live rows — Instagram or YouTube only (not Amazon affiliate links etc.)
   const agencyLive = (RAW.agencyInfluencers || [])
     .filter(i => {
-      if (!i.liveLink || !String(i.liveLink).startsWith('http')) return false;
+      if (!i.liveLink || !isSocialLink(i.liveLink)) return false;
       if (fP && i.product !== fP) return false;
       if (fB && i.brand   !== fB) return false;
       if (!passDateAgency(i.liveDate)) return false;
@@ -984,15 +989,27 @@ function renderOrderTargets() {
 function renderPOCCards() {
   const filtered    = isOrderFiltered();
   const pocOrders   = RAW.pocOrders   || {};
+  const pocSkuOrders= RAW.pocSkuOrders || {};
   const teamTargets = RAW.teamTargets || {};
   const POC_ORDER   = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+  const selSku      = (document.getElementById('or-product') || {}).value || '';
 
-  // Always count from OR_FILTERED when a filter is active; otherwise use pre-aggregated server counts
+  // Always count from OR_FILTERED when a filter is active; otherwise use pre-aggregated server counts.
+  // For POCs whose individual orders aren't in influencers (e.g. Priyanka's T&FC),
+  // fall back to pocSkuOrders when a product filter is set.
   const filteredPocCounts = {};
   OR_FILTERED.forEach(i => { filteredPocCounts[i.poc] = (filteredPocCounts[i.poc]||0)+1; });
 
   document.getElementById('or-poc-cards').innerHTML = POC_ORDER.map(name => {
-    const orders = filtered ? (filteredPocCounts[name]||0) : (pocOrders[name]||0);
+    let orders;
+    if (!filtered) {
+      orders = pocOrders[name] || 0;
+    } else if (selSku) {
+      // Product filter active: use pocSkuOrders for accurate per-SKU counts per POC
+      orders = (pocSkuOrders[name] || {})[selSku] || filteredPocCounts[name] || 0;
+    } else {
+      orders = filteredPocCounts[name] || 0;
+    }
     const target = Object.entries(teamTargets).find(([k]) => k.toLowerCase().startsWith(name.toLowerCase()))?.[1] || 0;
     const pct    = target > 0 ? Math.min(Math.round(orders / target * 100), 100) : 0;
     const isOver = target > 0 && orders >= target;
@@ -1018,13 +1035,15 @@ function renderPOCCards() {
 function renderSKUGrid() {
   const pocSkuOrders = RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
+  const selSku       = (document.getElementById('or-product') || {}).value || '';
   const POCS         = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
   const POC_COLORS   = { Mohit: '#16a34a', Hardev: '#2563eb', Satyam: '#7c3aed', Priyanka: '#ea580c' };
 
-  // All SKUs across all POCs
-  const allSkus = [...new Set(
+  // All SKUs across all POCs — filter to selected SKU if one is chosen
+  const allSkusRaw = [...new Set(
     Object.values(pocSkuOrders).flatMap(m => Object.keys(m))
   )].sort();
+  const allSkus = selSku ? allSkusRaw.filter(s => s === selSku) : allSkusRaw;
 
   const visiblePocs = selPoc ? [selPoc] : POCS;
 
