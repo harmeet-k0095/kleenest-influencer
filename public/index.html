@@ -205,7 +205,7 @@
   <div class="logo-area">
     <div class="logo-icon"><img src="/logo.png" alt="Kleenest" style="height:90px;width:auto;object-fit:contain;filter:brightness(0) invert(1);"></div>
     <div>
-      <h1>Kleenest &nbsp;|&nbsp; Influencer Dashboard</h1>
+      <h1>Influencer Dashboard</h1>
       <p>Live Analytics · Powered by Microsoft Graph API</p>
     </div>
   </div>
@@ -383,7 +383,6 @@
             <th onclick="sortLive('views')">Views</th>
             <th onclick="sortLive('likes')">Likes</th>
             <th onclick="sortLive('comments')">Comments</th>
-            <th onclick="sortLive('reelAmt')">Reel Cost</th>
             <th onclick="sortLive('total')">Total Cost</th>
             <th onclick="sortLive('cpv')">CPV</th>
             <th>Reel Link</th>
@@ -1224,7 +1223,6 @@ function renderLiveTable() {
       <td>${metricDot}${row.views?row.views.toLocaleString('en-IN'):'—'}</td>
       <td>${row.likes?row.likes.toLocaleString('en-IN'):'—'}</td>
       <td>${row.comments?row.comments.toLocaleString('en-IN'):'—'}</td>
-      <td style="font-weight:600;color:#15803d">${row.reelAmt ? '₹' + row.reelAmt.toLocaleString('en-IN') : '—'}</td>
       <td style="font-weight:700;color:#111827">${(row.reelAmt || row.productAmt) ? '₹' + ((row.reelAmt||0) + (row.productAmt||0)).toLocaleString('en-IN') : '—'}</td>
       <td>${cpvCell}</td>
       <td>${row.liveLink?`<a href="${row.liveLink}" target="_blank" class="link-btn">▶ View</a>`:'—'}</td>
