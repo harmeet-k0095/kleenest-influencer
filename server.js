@@ -503,19 +503,20 @@ app.get('/api/dashboard', async (req, res) => {
         product:    normProduct(r[idx.product]),
         liveLink:   r[idx.liveLink] || '',
         approval:   String(r[idx.approval] || '').trim(),
-        productAmt: Number(r[idx.productAmt]) || 0,
-        reelAmt:    Number(r[idx.reelAmt])    || 0,
+        productAmt: parseAmount(r[idx.productAmt]),
+        reelAmt:    parseAmount(r[idx.reelAmt]),
         views:      Number(r[idx.views])       || 0,
         likes:      Number(r[idx.likes])       || 0,
         comments:   Number(r[idx.comments])    || 0,
         cpv:        Number(r[idx.cpv])         || 0,
-        total:      Number(r[idx.total])       || 0,
+        total:      parseAmount(r[idx.total]),
       }));
 
-    // ── Reels gone live (have a live link) ───────────────────────────────────
-    const reelsLive = rows.filter(r =>
-      r[idx.liveLink] && String(r[idx.liveLink]).trim().startsWith('http')
-    ).length;
+    // ── Reels gone live (have a live link — Instagram or YouTube only) ────────
+    const reelsLive = rows.filter(r => {
+      const link = String(r[idx.liveLink] || '').trim();
+      return link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
+    }).length;
 
     // ── Parse Reel Targets (Targets = P wise) ───────────────────────────────
     const tValues = targetRaw.values || [];
@@ -670,16 +671,16 @@ app.get('/api/dashboard', async (req, res) => {
     const totalPayout    = approved.reduce((s, i) => s + i.total, 0);
     const uniqueProducts = [...new Set(influencers.map(i => i.product).filter(Boolean))];
 
-    // ── Live reels payout — computed from RAW rows (not filtered influencers) ──
-    // Using raw rows ensures we include every row that has a live link,
-    // even rows excluded from the influencers array (Excel errors, missing username, etc.)
+    // ── Live reels payout — sum over influencers with social live links ──────
+    // Use the parsed influencers array (with parseAmount applied) so amounts
+    // match exactly what the client displays. Social links only (Instagram / YouTube).
     let liveReelsReelAmt    = 0;
     let liveReelsProductAmt = 0;
-    rows.forEach(r => {
-      const link = String(r[idx.liveLink] || '').trim();
-      if (!link.startsWith('http')) return;
-      liveReelsReelAmt    += Number(r[idx.reelAmt])    || 0;
-      liveReelsProductAmt += Number(r[idx.productAmt]) || 0;
+    influencers.forEach(inf => {
+      const link = String(inf.liveLink || '').trim();
+      if (!link.includes('instagram.com') && !link.includes('youtube.com') && !link.includes('youtu.be')) return;
+      liveReelsReelAmt    += inf.reelAmt;
+      liveReelsProductAmt += inf.productAmt;
     });
     const liveReelsPayout = liveReelsReelAmt + liveReelsProductAmt;
 
