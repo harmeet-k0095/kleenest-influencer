@@ -655,7 +655,8 @@ function applyOrderFilters() {
     return true;
   });
 
-  document.getElementById('tab-orders-count').textContent = OR_FILTERED.length;
+  const pocTotal = Object.values(RAW.pocOrders || {}).reduce((s, v) => s + v, 0);
+  document.getElementById('tab-orders-count').textContent = isOrderFiltered() ? OR_FILTERED.length : (pocTotal || OR_FILTERED.length);
   renderOrderKPIs();
   renderPOCCards();
   renderSKUGrid();
