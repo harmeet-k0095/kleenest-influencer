@@ -801,12 +801,17 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
     );
     const items = await itemsRes.json();
 
-    const metrics = (Array.isArray(items) ? items : []).map(it => ({
-      url:      (it.url || it.inputUrl || '').split('?')[0].replace(/\/$/, ''),
-      views:    it.videoPlayCount ?? it.playCount ?? it.videoViewCount ?? 0,
-      likes:    it.likesCount     ?? it.likeCount  ?? 0,
-      comments: it.commentsCount  ?? it.commentCount ?? 0,
-    }));
+    const metrics = (Array.isArray(items) ? items : []).map(it => {
+      const rawUrl = (it.url || it.inputUrl || '');
+      // Normalise to shortcode key — Apify returns /p/ even for /reel/ originals
+      const scMatch = rawUrl.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+      return {
+        url:      scMatch ? `ig:${scMatch[1]}` : rawUrl.split('?')[0].replace(/\/$/, ''),
+        views:    it.videoPlayCount ?? it.playCount ?? it.videoViewCount ?? 0,
+        likes:    it.likesCount     ?? it.likeCount  ?? 0,
+        comments: it.commentsCount  ?? it.commentCount ?? 0,
+      };
+    });
 
     res.json({ status: 'SUCCEEDED', items: metrics });
   } catch (err) {

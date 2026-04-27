@@ -1156,6 +1156,10 @@ function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete ch
 // Strips query params, trailing slashes → canonical form
 function normaliseUrl(url) {
   if (!url) return '';
+  // Extract Instagram shortcode — works for /p/, /reel/, /tv/
+  // Apify returns /p/ even when the original link uses /reel/, so we key on shortcode only
+  const m = String(url).match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  if (m) return 'ig:' + m[1];
   return String(url).split('?')[0].replace(/\/$/, '').toLowerCase();
 }
 
