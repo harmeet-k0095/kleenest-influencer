@@ -569,14 +569,21 @@ function applyLiveFilters() {
   const fTo   = document.getElementById('lv-date-to').value;
   const dateFilterActive = !!(fM || fFrom || fTo);
 
-  // Date filter helper:
-  //   - If no date/month filter active → all rows pass
-  //   - If filter active AND row has no date → exclude
-  //   - If filter active AND row has date → check month + range
+  // Date filter helpers:
+  //   passDate(d)       — strict: exclude rows with no date (used for in-house)
+  //   passDateAgency(d) — lenient: rows with NO date always pass (agency has no dates yet)
   const passDate = (d) => {
     if (!dateFilterActive) return true;
-    if (!d) return false;                          // date unknown → exclude when filter active
-    if (fM && d.slice(0, 7) !== fM) return false;  // month filter
+    if (!d) return false;                           // date unknown → exclude when filter active
+    if (fM && d.slice(0, 7) !== fM) return false;
+    if (fFrom && d < fFrom) return false;
+    if (fTo   && d > fTo)   return false;
+    return true;
+  };
+  const passDateAgency = (d) => {
+    if (!dateFilterActive) return true;
+    if (!d) return true;                            // no date on agency rows → always include
+    if (fM && d.slice(0, 7) !== fM) return false;
     if (fFrom && d < fFrom) return false;
     if (fTo   && d > fTo)   return false;
     return true;
@@ -593,13 +600,13 @@ function applyLiveFilters() {
     })
     .map(i => ({ ...i, category: 'inhouse' }));
 
-  // Filter agency live rows — now also respect date filter
+  // Filter agency live rows — no date = include (dates not populated in agency sheet yet)
   const agencyLive = (RAW.agencyInfluencers || [])
     .filter(i => {
       if (!i.liveLink || !String(i.liveLink).startsWith('http')) return false;
       if (fP && i.product !== fP) return false;
       if (fB && i.brand   !== fB) return false;
-      if (!passDate(i.liveDate))  return false;
+      if (!passDateAgency(i.liveDate)) return false;
       return true;
     })
     .map(i => ({ ...i, category: 'agency' }));
