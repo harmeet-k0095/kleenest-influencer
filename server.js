@@ -744,18 +744,22 @@ app.get('/api/dashboard', async (req, res) => {
     const uniqueProducts = [...new Set(influencers.map(i => i.product).filter(Boolean))];
 
     // ── Live reels payout ────────────────────────────────────────────────────
-    // Reel Amount  : sum only rows with a social live link (Instagram / YouTube)
-    //               — payment is only made when a reel is actually posted.
-    // Product Amount: sum ALL rows with a non-zero product amount, regardless of
-    //               live status — products are sent before the reel goes live, so
-    //               the cost is incurred for every influencer who received a product.
-    let liveReelsReelAmt    = 0;
-    let liveReelsProductAmt = 0;
+    // Reel Amount        : rows with a social live link (Instagram / YouTube)
+    // Live Product Amount: rows WITH a social live link (product sent + reel posted)
+    // Advance Product Amt: rows WITHOUT any live link (product sent, reel not yet posted)
+    let liveReelsReelAmt      = 0;
+    let liveReelsProductAmt   = 0;   // product amount for rows that have gone live
+    let advanceProductAmt     = 0;   // product amount for rows not yet live
     rows.forEach(r => {
-      const link = String(r[idx.liveLink] || '').trim();
+      const link     = String(r[idx.liveLink] || '').trim();
       const isSocial = link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
-      if (isSocial) liveReelsReelAmt += parseAmount(r[idx.reelAmt]);
-      liveReelsProductAmt += parseAmount(r[idx.productAmt]);   // all rows
+      const prodAmt  = parseAmount(r[idx.productAmt]);
+      if (isSocial) {
+        liveReelsReelAmt    += parseAmount(r[idx.reelAmt]);
+        liveReelsProductAmt += prodAmt;
+      } else if (prodAmt > 0) {
+        advanceProductAmt   += prodAmt;   // product sent but no live link yet
+      }
     });
     const liveReelsPayout = liveReelsReelAmt + liveReelsProductAmt;
 
@@ -905,6 +909,7 @@ app.get('/api/dashboard', async (req, res) => {
         liveReelsPayout,
         liveReelsReelAmt,
         liveReelsProductAmt,
+        advanceProductAmt,
         agencyReelsLive,
         agencyReelsPayout,
         agencyReelsReelAmt,

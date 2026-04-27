@@ -304,6 +304,10 @@
         </div>
         <div class="kpi-value" id="lv-kpi-payout-inhouse" style="color:#15803d;">—</div>
         <div class="kpi-sub" id="lv-kpi-payout-inhouse-sub" style="margin-top:6px;">—</div>
+        <div id="lv-kpi-advance-product" style="display:none;margin-top:8px;padding:6px 10px;background:#fefce8;border:1px solid #fde047;border-radius:8px;font-size:.72rem;color:#854d0e;">
+          ⏳ <span style="font-weight:700;">Advance Product:</span> <span id="lv-kpi-advance-amt">—</span>
+          <span style="color:#a16207;margin-left:4px;">(pending live)</span>
+        </div>
       </div>
       <!-- Agency payout with TTC + INK breakdown -->
       <div class="kpi-card" style="background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1.5px solid #c4b5fd;">
@@ -715,8 +719,23 @@ function renderLiveKPIs() {
   const ttcPay = fT === 'inhouse' ? 0 : (filtered ? sum(ttcRows,'total')    : kpis.ttcReelsPayout      || sum(ttcRows, 'total'));
   const inkPay = fT === 'inhouse' ? 0 : (filtered ? sum(inkRows,'total')    : kpis.inkReelsPayout      || sum(inkRows, 'total'));
 
+  // Advance product amount: products sent to influencers who haven't posted yet
+  // Only shown in the unfiltered in-house view (server KPI, not computed from LV_FILTERED)
+  const advProd = (fT !== 'agency' && !filtered) ? (kpis.advanceProductAmt || 0) : 0;
+
   document.getElementById('lv-kpi-payout-inhouse').textContent     = '₹' + ihPay.toLocaleString('en-IN');
-  document.getElementById('lv-kpi-payout-inhouse-sub').textContent = '₹' + ihReel.toLocaleString('en-IN') + ' reel · ₹' + ihProd.toLocaleString('en-IN') + ' product';
+  document.getElementById('lv-kpi-payout-inhouse-sub').textContent =
+    '₹' + ihReel.toLocaleString('en-IN') + ' reel · ₹' + ihProd.toLocaleString('en-IN') + ' product';
+
+  // Show/hide advance product payment pill
+  const advEl  = document.getElementById('lv-kpi-advance-product');
+  const advAmt = document.getElementById('lv-kpi-advance-amt');
+  if (advProd > 0) {
+    advEl.style.display = 'block';
+    advAmt.textContent  = '₹' + advProd.toLocaleString('en-IN');
+  } else {
+    advEl.style.display = 'none';
+  }
 
   document.getElementById('lv-kpi-payout-agency').textContent     = '₹' + agPay.toLocaleString('en-IN');
   document.getElementById('lv-kpi-payout-ttc').textContent        = '₹' + ttcPay.toLocaleString('en-IN');
