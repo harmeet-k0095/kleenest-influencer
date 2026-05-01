@@ -220,17 +220,32 @@ function parseAgencySheet(values, sourceName) {
 }
 
 // ── Count orders from an individual IS sheet ─────────────────────────────────
+// Convert Excel date serial → JS Date (accounts for Excel's 1900 leap-year bug)
+const excelSerialToDate = serial => {
+  if (!serial || typeof serial !== 'number' || serial < 1) return null;
+  return new Date(Math.round((serial - 25569) * 86400000));
+};
+// Returns true if the date serial falls in April 2026
+const isApril2026 = serial => {
+  const d = excelSerialToDate(serial);
+  return d && d.getUTCFullYear() === 2026 && d.getUTCMonth() === 3; // month 3 = April (0-indexed)
+};
+
 function countOrdersFromSheet(values, statusValues) {
   if (!values || values.length < 2) return 0;
   const headers = values[0];
   const rows    = values.slice(1);
   const statusIdx   = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
   const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
+  const dateIdx     = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
   if (statusIdx < 0 || usernameIdx < 0) return 0;
-  return rows.filter(r =>
-    r[usernameIdx] && String(r[usernameIdx]).trim() &&
-    statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())
-  ).length;
+  return rows.filter(r => {
+    if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return false;
+    if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return false;
+    // If date column found, restrict to April 2026; rows with no date still counted
+    if (dateIdx >= 0 && r[dateIdx]) return isApril2026(r[dateIdx]);
+    return true;
+  }).length;
 }
 
 // ── Count orders by SKU from an individual IS sheet ───────────────────────────
@@ -242,11 +257,13 @@ function countOrdersBySkuFromSheet(values, statusValues) {
   const statusIdx   = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
   const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
   const productIdx  = headers.findIndex(h => /PRODUCT.?NAME/i.test(String(h)));
+  const dateIdx     = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
   if (statusIdx < 0 || usernameIdx < 0 || productIdx < 0) return {};
   const skuMap = {};
   rows.forEach(r => {
-    if (!r[usernameIdx] || !String(r[usernameIdx]).trim()) return;
+    if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return;
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return;
+    if (dateIdx >= 0 && r[dateIdx] && !isApril2026(r[dateIdx])) return;
     const raw = String(r[productIdx] || '').trim();
     const sku = normAgencyProduct(raw) || raw || 'Unknown';
     skuMap[sku] = (skuMap[sku] || 0) + 1;
@@ -487,6 +504,21 @@ app.get('/api/debug/raw-headers', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── /api/debug/mohit — inspect Mohit's sheet headers + sample rows ───────────
+app.get('/api/debug/mohit', async (req, res) => {
+  try {
+    const hmBase = `/users/${HARMEET_USER}/drive/items`;
+    const raw = await graphGet(`${hmBase}/${MOHIT_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`).catch(e => ({ values: [], error: e.message }));
+    const values = raw.values || [];
+    res.json({
+      totalRows: values.length,
+      headers: values[0] || [],
+      sample: values.slice(1, 6),
+      lastRows: values.slice(-5),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── /api/dashboard ───────────────────────────────────────────────────────────
