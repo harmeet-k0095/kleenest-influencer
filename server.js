@@ -242,8 +242,8 @@ function countOrdersFromSheet(values, statusValues) {
   return rows.filter(r => {
     if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return false;
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return false;
-    // If date column found, restrict to April 2026; rows with no date still counted
-    if (dateIdx >= 0 && r[dateIdx]) return isApril2026(r[dateIdx]);
+    // Restrict to April 2026 only; rows with no date are excluded
+    if (dateIdx >= 0) return r[dateIdx] && isApril2026(r[dateIdx]);
     return true;
   }).length;
 }
@@ -263,7 +263,7 @@ function countOrdersBySkuFromSheet(values, statusValues) {
   rows.forEach(r => {
     if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return;
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return;
-    if (dateIdx >= 0 && r[dateIdx] && !isApril2026(r[dateIdx])) return;
+    if (dateIdx >= 0 && (!r[dateIdx] || !isApril2026(r[dateIdx]))) return;
     const raw = String(r[productIdx] || '').trim();
     const sku = normAgencyProduct(raw) || raw || 'Unknown';
     skuMap[sku] = (skuMap[sku] || 0) + 1;
