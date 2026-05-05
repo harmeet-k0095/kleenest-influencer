@@ -1392,14 +1392,22 @@ app.post('/api/metrics/start', async (req, res) => {
   const token = process.env.APIFY_TOKEN;
   if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
-  // Validate + sanitise URLs before sending to Apify
-  const validUrls = urls.filter(u => {
+  // Validate, sanitise, and deduplicate URLs before sending to Apify.
+  // Apify rejects: non-Instagram URLs, bare domain, and any duplicate entries.
+  const seen = new Set();
+  const validUrls = [];
+  for (const u of urls) {
     const s = String(u || '').trim();
-    if (!s.includes('instagram.com')) return false;
+    if (!s.includes('instagram.com')) continue;
     const path = s.replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '').split('?')[0].trim();
-    return path.length >= 3;
-  });
-  console.log(`[Apify start] ${validUrls.length} valid / ${urls.length} total URLs. First 5:`, validUrls.slice(0, 5));
+    if (path.length < 3) continue;
+    // Normalise: strip trailing slash + query string for dedup key
+    const key = s.split('?')[0].replace(/\/$/, '').toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    validUrls.push(s);
+  }
+  console.log(`[Apify start] ${validUrls.length} valid+deduped / ${urls.length} total URLs. First 5:`, validUrls.slice(0, 5));
   if (validUrls.length === 0) return res.json({ runId: null, skipped: urls.length });
 
   try {
