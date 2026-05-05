@@ -151,6 +151,12 @@ function normAgencyProduct(name) {
 }
 
 // ── Parse one agency sheet tab (TTC or INK REVENUE) ─────────────────────────
+// Month name → 2-digit number
+const MONTH_NAME_TO_NUM = {
+  january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',
+  july:'07',august:'08',september:'09',october:'10',november:'11',december:'12',
+};
+
 function parseAgencySheet(values, sourceName) {
   if (!values || values.length < 2) return [];
   const headers = values[0];
@@ -160,12 +166,13 @@ function parseAgencySheet(values, sourceName) {
   const colIncludes = kw => headers.findIndex(h => String(h).trim().toUpperCase().includes(kw.toUpperCase()));
 
   const idx = {
+    closingMonth: 0,               // always col 0 — "Closing Month"
     username:   col('USERNAME'),
     profileLink:col('PROFILE LINK'),
     brand:      col('BRAND NAME'),
     product:    col('PRODUCT NAME'),
     liveLink:   colIncludes('LIVE LINK'),
-    liveDate:   colIncludes('DATE'),       // flexible: "LIVE DATE", "DATE", etc.
+    liveDate:   colIncludes('DATE'),
     productAmt: col('PRODUCT AMOUNT'),
     reelAmt:    col('REEL AMOUNT'),
     views:      col('VIEWS'),
@@ -175,10 +182,18 @@ function parseAgencySheet(values, sourceName) {
     language:   col('LANGUAGE'),
   };
 
-  return rows
-    .filter(r => r[idx.username] && String(r[idx.username]).trim())
-    .map(r => {
-      // Parse date: may be Excel serial number or already a string like "2026-04-05"
+  // Forward-fill "Closing Month" — Excel merged cells show value only in first row
+  let lastClosingMonth = null;
+  const enriched = rows.map(r => {
+    const raw = String(r[idx.closingMonth] || '').trim().toLowerCase();
+    if (MONTH_NAME_TO_NUM[raw]) lastClosingMonth = raw;
+    return { r, closingMonthName: lastClosingMonth };
+  });
+
+  return enriched
+    .filter(({ r }) => r[idx.username] && String(r[idx.username]).trim())
+    .map(({ r, closingMonthName }) => {
+      // Parse live date
       let liveDate = null;
       if (idx.liveDate >= 0 && r[idx.liveDate]) {
         const raw = r[idx.liveDate];
@@ -186,35 +201,36 @@ function parseAgencySheet(values, sourceName) {
           liveDate = excelDateToISO(raw);
         } else {
           const s = String(raw).trim();
-          // Accept YYYY-MM-DD; also handle DD/MM/YYYY
-          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-            liveDate = s;
-          } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
-            const [d, m, y] = s.split('/');
-            liveDate = `${y}-${m}-${d}`;
-          } else if (s) {
-            liveDate = s;
-          }
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s))      liveDate = s;
+          else if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d,m,y]=s.split('/'); liveDate=`${y}-${m}-${d}`; }
+          else if (s)                                liveDate = s;
         }
       }
+
+      // Derive YYYY-MM from closing month name (use current year)
+      const closingMonthYM = closingMonthName
+        ? `${new Date().getFullYear()}-${MONTH_NAME_TO_NUM[closingMonthName]}`
+        : null;
+
       return {
-        source:     sourceName,
-        poc:        'Agency',
-        agency:     sourceName,
-        username:   String(r[idx.username] || '').trim().replace(/\/$/, ''),
-        profileLink:r[idx.profileLink] || '',
-        brand:      normBrand(r[idx.brand]),
-        product:    normAgencyProduct(r[idx.product]),
-        liveLink:   r[idx.liveLink] || '',
+        source:        sourceName,
+        poc:           'Agency',
+        agency:        sourceName,
+        username:      String(r[idx.username] || '').trim().replace(/\/$/, ''),
+        profileLink:   r[idx.profileLink] || '',
+        brand:         normBrand(r[idx.brand]),
+        product:       normAgencyProduct(r[idx.product]),
+        liveLink:      r[idx.liveLink] || '',
         liveDate,
-        productAmt: parseAmount(r[idx.productAmt]),
-        reelAmt:    parseAmount(r[idx.reelAmt]),
-        views:      Number(r[idx.views])    || 0,
-        likes:      Number(r[idx.likes])    || 0,
-        comments:   Number(r[idx.comments]) || 0,
-        cpv:        Number(r[idx.cpv])      || 0,
-        language:   String(r[idx.language] || '').trim(),
-        total:      parseAmount(r[idx.reelAmt]) + parseAmount(r[idx.productAmt]),
+        closingMonthYM,              // "2026-04", "2026-05", etc. from "Closing Month" column
+        productAmt:    parseAmount(r[idx.productAmt]),
+        reelAmt:       parseAmount(r[idx.reelAmt]),
+        views:         Number(r[idx.views])    || 0,
+        likes:         Number(r[idx.likes])    || 0,
+        comments:      Number(r[idx.comments]) || 0,
+        cpv:           Number(r[idx.cpv])      || 0,
+        language:      String(r[idx.language] || '').trim(),
+        total:         parseAmount(r[idx.reelAmt]) + parseAmount(r[idx.productAmt]),
       };
     });
 }
@@ -225,16 +241,20 @@ const excelSerialToDate = serial => {
   if (!serial || typeof serial !== 'number' || serial < 1) return null;
   return new Date(Math.round((serial - 25569) * 86400000));
 };
-// Returns true if the date serial falls in April 2026
-const isApril2026 = serial => {
+// Returns true if a date serial falls in the given YYYY-MM (e.g. "2026-05")
+const isInTargetMonth = (serial, targetYM) => {
+  if (!targetYM) return true;
   const d = excelSerialToDate(serial);
-  return d && d.getUTCFullYear() === 2026 && d.getUTCMonth() === 3; // month 3 = April (0-indexed)
+  if (!d) return false;
+  const [y, m] = targetYM.split('-').map(Number);
+  return d.getUTCFullYear() === y && d.getUTCMonth() === m - 1;
 };
 
-function countOrdersFromSheet(values, statusValues) {
+// Count orders matching status values, filtered to a target month (YYYY-MM)
+function countOrdersFromSheet(values, statusValues, targetYM) {
   if (!values || values.length < 2) return 0;
-  const headers = values[0];
-  const rows    = values.slice(1);
+  const headers     = values[0];
+  const rows        = values.slice(1);
   const statusIdx   = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
   const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
   const dateIdx     = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
@@ -242,18 +262,16 @@ function countOrdersFromSheet(values, statusValues) {
   return rows.filter(r => {
     if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return false;
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return false;
-    // Restrict to April 2026 only; rows with no date are excluded
-    if (dateIdx >= 0) return r[dateIdx] && isApril2026(r[dateIdx]);
+    if (dateIdx >= 0) return r[dateIdx] && isInTargetMonth(r[dateIdx], targetYM);
     return true;
   }).length;
 }
 
-// ── Count orders by SKU from an individual IS sheet ───────────────────────────
-// Returns { productName: count } for rows matching the given statuses
-function countOrdersBySkuFromSheet(values, statusValues) {
+// Count orders by SKU, filtered to a target month (YYYY-MM)
+function countOrdersBySkuFromSheet(values, statusValues, targetYM) {
   if (!values || values.length < 2) return {};
-  const headers = values[0];
-  const rows    = values.slice(1);
+  const headers     = values[0];
+  const rows        = values.slice(1);
   const statusIdx   = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
   const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
   const productIdx  = headers.findIndex(h => /PRODUCT.?NAME/i.test(String(h)));
@@ -263,12 +281,80 @@ function countOrdersBySkuFromSheet(values, statusValues) {
   rows.forEach(r => {
     if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return;
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return;
-    if (dateIdx >= 0 && (!r[dateIdx] || !isApril2026(r[dateIdx]))) return;
+    if (dateIdx >= 0 && (!r[dateIdx] || !isInTargetMonth(r[dateIdx], targetYM))) return;
     const raw = String(r[productIdx] || '').trim();
     const sku = normAgencyProduct(raw) || raw || 'Unknown';
     skuMap[sku] = (skuMap[sku] || 0) + 1;
   });
   return skuMap;
+}
+
+// ── Parse overall reel targets from a targets tab ─────────────────────────────
+// Row 3=In-house, Row 4=TTC, Row 5=Ink Revenue; col 1 = overall total
+const parseTargetTabOverall = values => {
+  if (!values || values.length < 4) return null;
+  const inhouseReelTarget = Number((values[3] || [])[1]) || 0;
+  const agencyTtcTarget   = Number((values[4] || [])[1]) || 0;
+  const agencyInkTarget   = Number((values[5] || [])[1]) || 0;
+  const agencyReelTarget  = agencyTtcTarget + agencyInkTarget;
+  const totalReelTarget   = inhouseReelTarget + agencyReelTarget;
+  if (!inhouseReelTarget && !agencyReelTarget) return null;
+  return { inhouseReelTarget, agencyTtcTarget, agencyInkTarget, agencyReelTarget, totalReelTarget };
+};
+
+// ── Parse order targets from a targets tab ────────────────────────────────────
+const ORDER_TARGET_ABBR_MAP = {
+  'me':'Magic Eraser','magic eraser':'Magic Eraser',
+  'dp':'Washing Machine Powder','descale powder':'Washing Machine Powder',
+  'tc+bc':'Kleenest Bathroom Kit','tc+bc kit':'Kleenest Bathroom Kit','tc + bc kit':'Kleenest Bathroom Kit',
+  'trial':'Cleaning Trial Kit','trial kit':'Cleaning Trial Kit',
+  'mc':'Metal Cleaner Kit','metal cleaner':'Metal Cleaner Kit',
+  'kc':'Kitchen Cleaner','kitchen cleaner':'Kitchen Cleaner',
+  'dl':'Washing Machine Liquid','descale liquid':'Washing Machine Liquid',
+  'dt':'Washing Machine Tablet','descale tablet':'Washing Machine Tablet',
+  'klenzmo tile':'Tile & Floor Cleaner','klenzmo floor & tile cleaner':'Tile & Floor Cleaner',
+};
+function parseTargetTabOrders(tabValues) {
+  if (!tabValues || tabValues.length < 2) return { skuOrderTargets:{}, teamTargets:{}, inhouseOrderTarget:0, overallOrderTarget:0 };
+
+  // SKU order targets — "Overall Product-wise" section
+  const skuOrderTargets = {};
+  for (let ri = 0; ri < tabValues.length; ri++) {
+    const cell0 = String(tabValues[ri][0] || '').trim().toLowerCase();
+    if (cell0.includes('overall product-wise') || cell0.includes('product-wise order')) {
+      const headerRow = tabValues[ri + 1] || [];
+      const valRow    = tabValues[ri + 2] || [];
+      headerRow.forEach((h, i) => {
+        if (!h) return;
+        const key = String(h).trim().toLowerCase();
+        // Skip summary/total columns — not individual SKUs
+        if (!key || key.includes('total') || key.includes('grand')) return;
+        const canonical = ORDER_TARGET_ABBR_MAP[key] || String(h).trim();
+        const val = Number(valRow[i]) || 0;
+        if (val > 0) skuOrderTargets[canonical] = (skuOrderTargets[canonical] || 0) + val;
+      });
+      break;
+    }
+  }
+
+  // Team POC targets — "Orders Placed - In-house" section
+  const teamTargets = {};
+  let inSection = false;
+  tabValues.forEach(row => {
+    const label = String(row[0] || '').trim();
+    if (label.toLowerCase().includes('orders placed - in-house')) { inSection = true; return; }
+    if (inSection) {
+      const name = normPOC(label);
+      const num  = Number(row[1]);
+      if (['Mohit', 'Hardev', 'Satyam', 'Priyanka'].includes(name) && num > 0) teamTargets[name] = num;
+    }
+  });
+
+  // overallOrderTarget = sum of per-team targets (the "Orders Placed - In-house Targets" section)
+  // This gives April=800, May=1100 — NOT the SKU product-wise rows which are a separate planning view
+  const inhouseOrderTarget = Object.values(teamTargets).reduce((s, v) => s + v, 0);
+  const overallOrderTarget = inhouseOrderTarget;
+  return { skuOrderTargets, teamTargets, inhouseOrderTarget, overallOrderTarget };
 }
 
 // ── /api/debug/inhouse-amounts — raw product/reel/total amounts from live sheet ──
@@ -341,6 +427,41 @@ app.get('/api/debug/inhouse-amounts', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── /api/debug/harmeet-drive — list harmeet's drive + resolve share URL ───────
+app.get('/api/debug/harmeet-drive', async (req, res) => {
+  try {
+    const hmBase   = `/users/${HARMEET_USER}/drive`;
+    const shareUrl = 'https://velocityeventures-my.sharepoint.com/:x:/g/personal/harmeet_kleenest_in/IQDWHJBLfmyQSJ9G9EHY-hlZAaSEKDBqRIT9r0Eajk7NRjg?e=Tavl3t';
+    const encoded  = 'u!' + Buffer.from(shareUrl).toString('base64').replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+    const [files, shareItem] = await Promise.all([
+      graphGet(`${hmBase}/root/children`),
+      graphGet(`/shares/${encoded}/driveItem`).catch(e => ({ error: e.message })),
+    ]);
+    res.json({
+      shareItem: { id: shareItem.id, name: shareItem.name, error: shareItem.error },
+      driveFiles: (files.value || []).map(f => ({ id: f.id, name: f.name })),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── /api/debug/harmeet-may — peek at the May targets file tabs + first rows ───
+app.get('/api/debug/harmeet-may', async (req, res) => {
+  try {
+    const fileId = req.query.id;
+    if (!fileId) return res.status(400).json({ error: 'pass ?id=FILE_ID' });
+    const base = `/users/${HARMEET_USER}/drive/items/${fileId}/workbook/worksheets`;
+    const sheets = await graphGet(base);
+    const tabs   = (sheets.value || []).map(s => s.name);
+    // Peek at each tab (first 10 rows)
+    const peeks  = {};
+    for (const tab of tabs.slice(0, 10)) {
+      const r = await graphGet(`${base}('${encodeURIComponent(tab)}')/usedRange`).catch(() => ({ values: [] }));
+      peeks[tab] = (r.values || []).slice(0, 8);
+    }
+    res.json({ tabs, peeks });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── /api/debug/sheets — list all worksheet tabs in both key files ────────────
@@ -521,6 +642,20 @@ app.get('/api/debug/mohit', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── /api/debug/targets-raw — inspect raw April/May target tab structures ─────
+app.get('/api/debug/targets-raw', async (req, res) => {
+  try {
+    const hmBase = `/users/${HARMEET_USER}/drive/items`;
+    const safeGet = p => graphGet(p).catch(() => ({ values: [] }));
+    const [aprilRaw, mayRaw] = await Promise.all([
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange`),
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange`),
+    ]);
+    const trim = raw => (raw.values || []).map((r, i) => ({ row: i, cells: r.slice(0, 8) })).filter(r => r.cells.some(c => String(c).trim()));
+    res.json({ april: trim(aprilRaw), may: trim(mayRaw) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── /api/dashboard ───────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {
@@ -541,27 +676,48 @@ app.get('/api/dashboard', async (req, res) => {
       return { values: [] };
     };
 
-    const agBase = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
+    // Satyam keeps separate tabs per month; fetch both so we can count each month accurately
+    const fetchSatyamTab = async () => {
+      for (const name of ['May master sheet', 'April master sheet', 'Master sheet', 'Main Sheet']) {
+        const r = await safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('${encodeURIComponent(name)}')/usedRange`);
+        if (r.values && r.values.length > 1) return r;
+      }
+      return { values: [] };
+    };
 
+    const agBase         = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
     const priyankaTfcBase = `/users/${PRIYANKA_USER}/drive/items/${PRIYANKA_TFC_ID}/workbook/worksheets`;
 
+    // Fetch April + May target tabs in parallel (both needed for month-aware targets)
     const [
       liveRaw, targetRaw,
-      mohitRaw, hardevRaw, satyamRaw, teamTargetsRaw, monthlyTargetRaw,
-      overviewRaw, ttcRaw, inkRaw, priyankaTfcRaw,
+      mohitRaw, hardevRaw, satyamRaw, satyamAprilRaw,
+      aprilTargetRaw, mayTargetRaw, ttcRaw, inkRaw, priyankaTfcRaw,
     ] = await Promise.all([
       fetchLiveTab(),
       safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange`),
       safeGet(`${hmBase}/${MOHIT_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
       safeGet(`${hmBase}/${HARDEV_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
+      fetchSatyamTab(),                                // May (or first available) Satyam sheet
       safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange`),
-      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Team%20Targets')/usedRange`),
-      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Monthy%20target')/usedRange`),
-      graphGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('Overview')/usedRange`),
-      safeGet(`${agBase}('TTC')/usedRange`),           // Agency: TTC
-      safeGet(`${agBase}('INK%20REVENUE')/usedRange`), // Agency: Ink Revenue
-      safeGet(`${priyankaTfcBase}('Sheet1')/usedRange`), // Priyanka's Tile & Floor Cleaner orders
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange`),
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange`),
+      safeGet(`${agBase}('TTC')/usedRange`),
+      safeGet(`${agBase}('INK%20REVENUE')/usedRange`),
+      safeGet(`${priyankaTfcBase}('Sheet1')/usedRange`),
     ]);
+
+    // ── Derive target month: prefer May if it has data, fall back to April ───
+    const MONTH_NUMS = { January:'01',February:'02',March:'03',April:'04',May:'05',
+                         June:'06',July:'07',August:'08',September:'09',
+                         October:'10',November:'11',December:'12' };
+    const mayHasData   = (mayTargetRaw.values   || []).length > 5;
+    const aprilHasData = (aprilTargetRaw.values || []).length > 5;
+    const _targetTabName = mayHasData ? 'May Targets' : aprilHasData ? 'April Targets' : '';
+    const targetTabRaw   = mayHasData ? mayTargetRaw : aprilHasData ? aprilTargetRaw : { values: [] };
+    const _monthName     = _targetTabName.replace(' Targets', '').trim();
+    const _monthNum      = MONTH_NUMS[_monthName];
+    const targetMonth    = _monthNum ? `${new Date().getFullYear()}-${_monthNum}` : null;
 
     // ── Parse Live Sheet ─────────────────────────────────────────────────────
     const mainValues = liveRaw.values || [];
@@ -616,10 +772,23 @@ app.get('/api/dashboard', async (req, res) => {
         total:      parseAmount(r[idx.total]),
       }));
 
-    // ── Reels gone live (have a live link — Instagram or YouTube only) ────────
+    // ── Helper: extract YYYY-MM from a raw row's liveDate cell ──────────────
+    const rowMonth = r => {
+      const raw = r[idx.liveDate];
+      if (!raw) return null;
+      if (typeof raw === 'number') { const iso = excelDateToISO(raw); return iso ? iso.slice(0,7) : null; }
+      const s = String(raw).trim();
+      const m = s.match(/(\d{4})-(\d{2})/);
+      return m ? m[0] : null;
+    };
+
+    // ── Reels gone live — filtered to target month if known ──────────────────
     const reelsLive = rows.filter(r => {
       const link = String(r[idx.liveLink] || '').trim();
-      return link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
+      const isSocial = link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
+      if (!isSocial) return false;
+      if (targetMonth && rowMonth(r) !== targetMonth) return false;
+      return true;
     }).length;
 
     // ── Parse Reel Targets (Targets = P wise) ───────────────────────────────
@@ -633,104 +802,60 @@ app.get('/api/dashboard', async (req, res) => {
     // keep old key for backward compat
     const productTargets = reelTargets;
 
-    // ── Parse Order Targets (Monthly target sheet) ───────────────────────────
-    const mtValues = monthlyTargetRaw.values || [];
-    const orderTargets = {};
-    let inProductSection = false;
-    for (const row of mtValues) {
-      const cell0 = String(row[0] || '').trim();
-      const cell1 = String(row[1] || '').trim();
-      if (cell0.includes('Product-wise Order Allocation')) { inProductSection = true; continue; }
-      if (inProductSection) {
-        if (cell0 === 'Product' || cell0 === '') continue;
-        if (cell0.toLowerCase().includes('total')) break;
-        const val = Number(row[1]);
-        if (cell0 && !isNaN(val) && val > 0) orderTargets[cell0.trim()] = val;
-      }
-    }
+    // ── Parse Targets Tab (active month) ────────────────────────────────────
+    const targetTabValues = targetTabRaw.values || [];
 
-    // ── Team Targets — parse from Overview sheet ─────────────────────────────
-    // Overview "Orders Placed - In-house Targets" section has:
-    //   Mohit: 300, Satyam: 200, Hardev: 200, Priyanka: 100
-    // NOTE: Priyanka = 100 orders placed target (not 660 — that's agency live reels, a different KPI)
-    const overviewValues = overviewRaw.values || [];
-    const teamTargets = {
-      Mohit:    300,
-      Satyam:   200,
-      Hardev:   200,
-      Priyanka: 100,
+    // ── Parse order + reel targets for both April and May ────────────────────
+    const _year      = new Date().getFullYear();
+    const _aprOrders = parseTargetTabOrders(aprilTargetRaw.values);
+    const _mayOrders = parseTargetTabOrders(mayTargetRaw.values);
+    const _aprReel   = parseTargetTabOverall(aprilTargetRaw.values);
+    const _mayReel   = parseTargetTabOverall(mayTargetRaw.values);
+
+    // Active-month targets (drives server-side KPIs)
+    const _activeOrders  = mayHasData ? _mayOrders : aprilHasData ? _aprOrders : { skuOrderTargets:{}, teamTargets:{}, inhouseOrderTarget:0, overallOrderTarget:0 };
+    const orderTargets   = _activeOrders.skuOrderTargets;
+    const teamTargets    = Object.keys(_activeOrders.teamTargets).length
+      ? _activeOrders.teamTargets
+      : { Mohit: 300, Satyam: 200, Hardev: 200, Priyanka: 100 };
+
+    // ── Helper: build pocOrders + pocSkuOrders for a given month ────────────
+    const ORDER_STATUSES = ['order place', 'order placed', 'live'];
+    const _satyamFor = ym => {
+      // Use April-specific sheet for April; fall back to main sheet otherwise
+      const aprSheet = (satyamAprilRaw.values || []).length > 1 ? satyamAprilRaw.values : null;
+      return ym === `${_year}-04` && aprSheet ? aprSheet : satyamRaw.values;
     };
-    // Override with live values from Overview "Orders Placed - In-house Targets" section.
-    // NOTE: Only read Mohit/Hardev/Satyam from the sheet — Priyanka's cell is a live formula
-    // (=COUNTA) that returns her actual count, not her target of 100.
-    let inOrdersSection = false;
-    overviewValues.forEach(row => {
-      const label = String(row[0] || '').trim();
-      if (label.toLowerCase().includes('orders placed - in-house')) { inOrdersSection = true; return; }
-      if (inOrdersSection) {
-        const name = normPOC(label);
-        const num  = Number(row[1]);
-        if (['Mohit', 'Hardev', 'Satyam'].includes(name) && num > 0) {
-          teamTargets[name] = num;
-        }
-      }
+    const _pocOrdersFor = ym => ({
+      Mohit:    countOrdersFromSheet(mohitRaw.values,       ORDER_STATUSES, ym),
+      Hardev:   countOrdersFromSheet(hardevRaw.values,      ORDER_STATUSES, ym),
+      Satyam:   countOrdersFromSheet(_satyamFor(ym),        ORDER_STATUSES, ym),
+      Priyanka: countOrdersFromSheet(priyankaTfcRaw.values, ORDER_STATUSES, ym),
+    });
+    const _pocSkuOrdersFor = ym => ({
+      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,       ORDER_STATUSES, ym),
+      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values,      ORDER_STATUSES, ym),
+      Satyam:   countOrdersBySkuFromSheet(_satyamFor(ym),        ORDER_STATUSES, ym),
+      Priyanka: countOrdersBySkuFromSheet(priyankaTfcRaw.values, ORDER_STATUSES, ym),
     });
 
-    // ── Orders placed per POC from individual sheets ──────────────────────────
-    const ORDER_STATUSES = ['order place', 'order placed', 'live'];
-    const pocOrders = {
-      Mohit:    countOrdersFromSheet(mohitRaw.values,      ORDER_STATUSES),
-      Hardev:   countOrdersFromSheet(hardevRaw.values,     ORDER_STATUSES),
-      Satyam:   countOrdersFromSheet(satyamRaw.values,     ORDER_STATUSES),
-      Priyanka: countOrdersFromSheet(priyankaTfcRaw.values, ORDER_STATUSES),
-    };
+    // Orders for the active target month (used in server KPIs)
+    const pocOrders    = _pocOrdersFor(targetMonth);
+    const pocSkuOrders = _pocSkuOrdersFor(targetMonth);
+    const skuOrderTargets = { ...orderTargets };
 
-    // ── SKU-wise orders per POC ───────────────────────────────────────────────
-    const pocSkuOrders = {
-      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,       ORDER_STATUSES),
-      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values,      ORDER_STATUSES),
-      Satyam:   countOrdersBySkuFromSheet(satyamRaw.values,      ORDER_STATUSES),
-      Priyanka: countOrdersBySkuFromSheet(priyankaTfcRaw.values, ORDER_STATUSES),
+    // ── Per-month targets map (sent to client for month-aware display) ────────
+    const monthlyTargets = {};
+    if (_aprReel) monthlyTargets[`${_year}-04`] = {
+      ..._aprReel, ..._aprOrders,
+      pocOrders:    _pocOrdersFor(`${_year}-04`),
+      pocSkuOrders: _pocSkuOrdersFor(`${_year}-04`),
     };
-
-    // ── SKU Order Targets — from Overview rows 19-20 ──────────────────────────
-    // row19: header row with SKU names, row20: corresponding target numbers
-    // Canonical map from sheet names → canonical SKU names
-    const SKU_ORDER_TARGET_NORM = {
-      'magic eraser':              'Magic Eraser',
-      'descale powder':            'Washing Machine Powder',
-      'descale liquid':            'Washing Machine Liquid',
-      'descale tablet':            'Washing Machine Tablet',
-      'tc+bc kit':                 'Kleenest Bathroom Kit',
-      'tc + bc kit':               'Kleenest Bathroom Kit',
-      'trial kit':                 'Cleaning Trial Kit',
-      'metal cleaner':             'Metal Cleaner Kit',
-      'kitchen cleaner':           'Kitchen Cleaner',
-      'klenzmo tile cleaner new':  'Tile & Floor Cleaner',
-      'klenzmo floor & tile cleaner': 'Tile & Floor Cleaner',
+    if (_mayReel) monthlyTargets[`${_year}-05`] = {
+      ..._mayReel, ..._mayOrders,
+      pocOrders:    _pocOrdersFor(`${_year}-05`),
+      pocSkuOrders: _pocSkuOrdersFor(`${_year}-05`),
     };
-    const skuOrderTargets = {};   // canonical SKU name → target order count
-    let skuHeaderRow = null, skuTargetRow = null;
-    for (let ri = 0; ri < overviewValues.length; ri++) {
-      const row = overviewValues[ri];
-      const cell0 = String(row[0] || '').trim().toLowerCase();
-      if (cell0 === 'magic eraser' || cell0 === 'descale powder') {
-        // This is the SKU header row
-        skuHeaderRow = row;
-        skuTargetRow = overviewValues[ri + 1] || [];
-        break;
-      }
-    }
-    if (skuHeaderRow && skuTargetRow) {
-      skuHeaderRow.forEach((name, i) => {
-        if (!name) return;
-        const key = String(name).trim().toLowerCase();
-        if (key === 'total orders placed' || key === 'total') return;
-        const canonical = SKU_ORDER_TARGET_NORM[key] || String(name).trim();
-        const target    = Number(skuTargetRow[i]) || 0;
-        if (target > 0) skuOrderTargets[canonical] = (skuOrderTargets[canonical] || 0) + target;
-      });
-    }
 
     // ── Aggregates ───────────────────────────────────────────────────────────
     const productMap = {};
@@ -786,10 +911,11 @@ app.get('/api/dashboard', async (req, res) => {
       const link     = String(r[idx.liveLink] || '').trim();
       const isSocial = link.includes('instagram.com') || link.includes('youtube.com') || link.includes('youtu.be');
       const prodAmt  = parseAmount(r[idx.productAmt]);
-      if (isSocial) {
+      const inMonth  = !targetMonth || rowMonth(r) === targetMonth;
+      if (isSocial && inMonth) {
         liveReelsReelAmt    += parseAmount(r[idx.reelAmt]);
         liveReelsProductAmt += prodAmt;
-      } else if (prodAmt > 0) {
+      } else if (prodAmt > 0 && !isSocial && inMonth) {
         advanceProductAmt   += prodAmt;   // product sent but no live link yet
       }
     });
@@ -811,21 +937,20 @@ app.get('/api/dashboard', async (req, res) => {
       'Klenzmo floor & Tile Cleaner':  'Klenzmo Bathroom Kit',
     };
 
-    // ── Parse Overview tab: TTC, Ink Revenue, and in-house SKU live targets ───
-    // row2: product names at col 3+
-    // row3: In-house targets
-    // row4: TTC Agency Go-Live targets
-    // row5: Ink Revenue Agency Go-Live targets
-    const ovValues = overviewRaw.values || [];
-    const ttcSkuLiveTargets   = {};   // product → TTC target
-    const inkSkuLiveTargets   = {};   // product → INK REVENUE target
-    const agencySkuLiveTargets= {};   // product → TTC + INK combined
-    const inhouseSkuLiveTargets={};   // product → in-house target
-    if (ovValues.length >= 6) {
-      const productHeader = ovValues[2] || [];
-      const inhouseRow    = ovValues[3] || [];
-      const ttcRow        = ovValues[4] || [];
-      const inkRow        = ovValues[5] || [];
+    // ── Parse SKU Live Targets from targets tab ──────────────────────────────
+    // targetTabValues[2]: product names starting at col 3
+    // targetTabValues[3]: In-house targets per SKU + total at col 1
+    // targetTabValues[4]: TTC Agency Go-Live per SKU + total at col 1
+    // targetTabValues[5]: Ink Revenue Agency Go-Live per SKU + total at col 1
+    const ttcSkuLiveTargets   = {};
+    const inkSkuLiveTargets   = {};
+    const agencySkuLiveTargets= {};
+    const inhouseSkuLiveTargets={};
+    if (targetTabValues.length >= 6) {
+      const productHeader = targetTabValues[2] || [];
+      const inhouseRow    = targetTabValues[3] || [];
+      const ttcRow        = targetTabValues[4] || [];
+      const inkRow        = targetTabValues[5] || [];
       productHeader.slice(3).forEach((name, i) => {
         if (!name) return;
         const c   = i + 3;
@@ -851,7 +976,8 @@ app.get('/api/dashboard', async (req, res) => {
     // ── Agency: parse TTC + INK REVENUE sheets ───────────────────────────────
     const ttcInfluencers = parseAgencySheet(ttcRaw.values,  'TTC');
     const inkInfluencers = parseAgencySheet(inkRaw.values,  'INK REVENUE');
-    const agencyInfluencers = [...ttcInfluencers, ...inkInfluencers];
+    // All agency rows across all months — sent to client for table display / month filter browsing
+    const _allAgencyInfluencers = [...ttcInfluencers, ...inkInfluencers];
 
     // Count rows with Instagram or YouTube Shorts links as "live reels".
     // Amazon affiliate links and other non-social URLs in the Live Link column are excluded.
@@ -861,12 +987,23 @@ app.get('/api/dashboard', async (req, res) => {
     };
     const isLive = inf => inf.liveLink && isLiveSocial(inf.liveLink);
 
-    // Per-agency live counts
-    const ttcReelsLive    = ttcInfluencers.filter(isLive).length;
-    const inkReelsLive    = inkInfluencers.filter(isLive).length;
+    // Filter agency row to target month: match closingMonthYM, falling back to liveDate
+    const isAgencyInMonth = inf => {
+      if (!targetMonth) return true;                              // no month set → include all
+      const ym = inf.closingMonthYM || inf.liveDate?.slice(0, 7);
+      return ym === targetMonth;
+    };
+    const isLiveInMonth = inf => isLive(inf) && isAgencyInMonth(inf);
+
+    // Send ALL months to client — client-side month filter handles per-month browsing
+    const agencyInfluencers = _allAgencyInfluencers;
+
+    // Per-agency live counts (target-month filtered)
+    const ttcReelsLive    = ttcInfluencers.filter(isLiveInMonth).length;
+    const inkReelsLive    = inkInfluencers.filter(isLiveInMonth).length;
     const agencyReelsLive = ttcReelsLive + inkReelsLive;
 
-    // Per-agency SKU actuals
+    // Per-agency SKU actuals (target-month filtered)
     const ttcSkuActuals    = {};
     const inkSkuActuals    = {};
     const agencySkuActuals = {};
@@ -875,14 +1012,14 @@ app.get('/api/dashboard', async (req, res) => {
       map[p] = (map[p] || 0) + 1;
       agencySkuActuals[p] = (agencySkuActuals[p] || 0) + 1;
     };
-    ttcInfluencers.forEach(inf => { if (isLive(inf)) addSku(ttcSkuActuals, inf); });
-    inkInfluencers.forEach(inf => { if (isLive(inf)) addSku(inkSkuActuals, inf); });
+    ttcInfluencers.forEach(inf => { if (isLiveInMonth(inf)) addSku(ttcSkuActuals, inf); });
+    inkInfluencers.forEach(inf => { if (isLiveInMonth(inf)) addSku(inkSkuActuals, inf); });
 
-    // Per-agency payout
+    // Per-agency payout (target-month filtered)
     let ttcReelsReelAmt = 0, ttcReelsProductAmt = 0;
     let inkReelsReelAmt = 0, inkReelsProductAmt = 0;
-    ttcInfluencers.forEach(inf => { if (!isLive(inf)) return; ttcReelsReelAmt += inf.reelAmt; ttcReelsProductAmt += inf.productAmt; });
-    inkInfluencers.forEach(inf => { if (!isLive(inf)) return; inkReelsReelAmt += inf.reelAmt; inkReelsProductAmt += inf.productAmt; });
+    ttcInfluencers.forEach(inf => { if (!isLiveInMonth(inf)) return; ttcReelsReelAmt += inf.reelAmt; ttcReelsProductAmt += inf.productAmt; });
+    inkInfluencers.forEach(inf => { if (!isLiveInMonth(inf)) return; inkReelsReelAmt += inf.reelAmt; inkReelsProductAmt += inf.productAmt; });
     const ttcReelsPayout    = ttcReelsReelAmt    + ttcReelsProductAmt;
     const inkReelsPayout    = inkReelsReelAmt    + inkReelsProductAmt;
     const agencyReelsReelAmt    = ttcReelsReelAmt    + inkReelsReelAmt;
@@ -921,14 +1058,16 @@ app.get('/api/dashboard', async (req, res) => {
     });
 
     const overallReelTarget  = skuTargets.reduce((s, x) => s + x.reelTarget, 0);
-    // Reel live targets: Agency 660 + In-house 450 = 1110
-    const agencyReelTarget   = 660;
-    const inhouseReelTarget  = 450;
-    const totalReelTarget    = agencyReelTarget + inhouseReelTarget;
-    // Order targets (from Overview): Mohit 300 + Satyam 200 + Hardev 200 + Priyanka 100 = 800 (in-house)
-    const inhouseOrderTarget = Object.values(teamTargets).reduce((s, v) => s + v, 0);
-    // Overall SKU order target = sum of product-wise targets (1020)
-    const overallOrderTarget = Object.values(skuOrderTargets).reduce((s, v) => s + v, 0) || 1020;
+    // Reel live targets — use active parsed tab (fallback hardcodes)
+    const _activeReel       = mayHasData ? _mayReel : aprilHasData ? _aprReel : null;
+    const inhouseReelTarget = _activeReel?.inhouseReelTarget || 525;
+    const agencyTtcTarget   = _activeReel?.agencyTtcTarget   || 0;
+    const agencyInkTarget   = _activeReel?.agencyInkTarget   || 0;
+    const agencyReelTarget  = _activeReel?.agencyReelTarget  || 710;
+    const totalReelTarget   = inhouseReelTarget + agencyReelTarget;
+    // Order targets — use parsed helper (no more double-counting "Total Orders Placed")
+    const inhouseOrderTarget = _activeOrders.inhouseOrderTarget || Object.values(teamTargets).reduce((s, v) => s + v, 0);
+    const overallOrderTarget = _activeOrders.overallOrderTarget || 1020;
     const agencyOrderTarget  = overallOrderTarget - inhouseOrderTarget;
     const overallActualReels = influencers.length;
 
@@ -973,18 +1112,142 @@ app.get('/api/dashboard', async (req, res) => {
       ttcSkuActuals,
       inkSkuActuals,
       agencyInfluencers,
+      monthlyTargets,
       overallTargets: { reelTarget: overallReelTarget, agencyReelTarget, inhouseReelTarget, totalReelTarget, orderTarget: overallOrderTarget, agencyOrderTarget, inhouseOrderTarget, actualReels: overallActualReels, totalOrders },
       teamTargets,
       pocOrders,
       pocSkuOrders,
       skuOrderTargets,
       influencers,
+      targetMonth,
       lastUpdated:  new Date().toISOString(),
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Graph PATCH helper (write to Excel) ──────────────────────────────────────
+async function graphPatch(path, body) {
+  const token = await getToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+function colLetter(index) {
+  let col = '', n = index + 1;
+  while (n > 0) { const rem = (n - 1) % 26; col = String.fromCharCode(65 + rem) + col; n = Math.floor((n - 1) / 26); }
+  return col;
+}
+
+// ── GET /api/metrics/empty-rows — rows with Instagram links but no VIEWS ───────
+// Scans: Live Inhouse (in-house), TTC + INK REVENUE (agency)
+// Query: ?limit=N (default 50, max 200)  ?type=inhouse|agency (default: both)
+// Returns: { rows: [{excelRow, username, url, viewsCol, likesCol, commentsCol, fileId, sheetName}], totalEmpty, inhouseEmpty, agencyEmpty }
+app.get('/api/metrics/empty-rows', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const type  = req.query.type || 'all'; // 'inhouse' | 'agency' | 'all'
+
+  // Scan one sheet and append qualifying rows to `out`; increment total.count
+  async function scanSheet(fileId, sheetName, out, totalRef) {
+    const enc  = encodeURIComponent(sheetName);
+    const base = `/users/${PRIYANKA_USER}/drive/items/${fileId}/workbook/worksheets`;
+    let data;
+    try { data = await graphGet(`${base}('${enc}')/usedRange`); } catch { return; }
+    const values = data.values || [];
+    if (values.length < 2) return;
+
+    const headers  = values[0];
+    const col      = kw => headers.findIndex(h => String(h).trim().toUpperCase() === kw.toUpperCase());
+    const colInc   = kw => headers.findIndex(h => String(h).trim().toUpperCase().includes(kw.toUpperCase()));
+
+    const idx = {
+      username: col('USERNAME'),
+      liveLink: colInc('LIVE LINK'),
+      views:    col('VIEWS'),
+      likes:    col('LIKES'),
+      comments: colInc('COMMENT'),
+    };
+    if (idx.liveLink < 0) return; // sheet layout doesn't match — skip silently
+
+    const viewsCol    = colLetter(idx.views);
+    const likesCol    = colLetter(idx.likes);
+    const commentsCol = colLetter(idx.comments);
+
+    for (let i = 1; i < values.length; i++) {
+      const row  = values[i];
+      const link = String(row[idx.liveLink] || '').trim();
+      if (!link.includes('instagram.com')) continue;
+      const views = row[idx.views];
+      if (views && Number(views) > 0) continue;
+      totalRef.count++;
+      if (out.length < limit) {
+        out.push({
+          excelRow:  i + 1,
+          username:  String(row[idx.username] || '').trim(),
+          url:       link.split('?')[0].replace(/\/$/, ''),
+          viewsCol, likesCol, commentsCol,
+          fileId, sheetName,
+        });
+      }
+    }
+  }
+
+  try {
+    const rows    = [];
+    const inTotal = { count: 0 };
+    const agTotal = { count: 0 };
+
+    if (type !== 'agency') await scanSheet(LIVE_FILE_ID,   'Live Inhouse', rows, inTotal);
+    if (type !== 'inhouse') {
+      await scanSheet(AGENCY_FILE_ID, 'TTC',         rows, agTotal);
+      await scanSheet(AGENCY_FILE_ID, 'INK REVENUE', rows, agTotal);
+    }
+
+    res.json({
+      rows,
+      totalEmpty:   inTotal.count + agTotal.count,
+      inhouseEmpty: inTotal.count,
+      agencyEmpty:  agTotal.count,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/metrics/write-sheet — write scraped metrics to Excel cells ───────
+// Body: { updates: [{ excelRow, views, likes, comments, viewsCol, likesCol, commentsCol, fileId, sheetName }] }
+// fileId / sheetName default to LIVE_FILE_ID / 'Live Inhouse' for backward compat
+app.post('/api/metrics/write-sheet', async (req, res) => {
+  const { updates } = req.body || {};
+  if (!Array.isArray(updates) || !updates.length) return res.json({ written: 0 });
+
+  let written = 0;
+  const errors = [];
+  for (const u of updates) {
+    const {
+      excelRow, views, likes, comments,
+      viewsCol, likesCol, commentsCol,
+      fileId    = LIVE_FILE_ID,
+      sheetName = 'Live Inhouse',
+    } = u;
+    const enc  = encodeURIComponent(sheetName);
+    const base = `/users/${PRIYANKA_USER}/drive/items/${fileId}/workbook/worksheets`;
+    try {
+      await graphPatch(`${base}('${enc}')/range(address='${viewsCol}${excelRow}')`,    { values: [[views]]    });
+      await graphPatch(`${base}('${enc}')/range(address='${likesCol}${excelRow}')`,    { values: [[likes]]    });
+      await graphPatch(`${base}('${enc}')/range(address='${commentsCol}${excelRow}')`, { values: [[comments]] });
+      written++;
+    } catch (err) {
+      errors.push({ excelRow, sheetName, error: err.message });
+    }
+  }
+  res.json({ written, errors });
 });
 
 // ── POST /api/metrics/start — kick off an Apify run (returns instantly) ───────
@@ -1044,10 +1307,10 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
 
     const metrics = (Array.isArray(items) ? items : []).map(it => {
       const rawUrl = (it.url || it.inputUrl || '');
-      // Normalise to shortcode key — Apify returns /p/ even for /reel/ originals
-      const scMatch = rawUrl.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+      // Extract shortcode — key on it so /p/ and /reel/ and /reels/ all match
+      const scMatch = rawUrl.match(/instagram\.com\/(?:p|reels?|tv)\/([A-Za-z0-9_-]+)/);
       return {
-        url:      scMatch ? `ig:${scMatch[1]}` : rawUrl.split('?')[0].replace(/\/$/, ''),
+        url:      scMatch ? `https://www.instagram.com/reel/${scMatch[1]}/` : rawUrl.split('?')[0].replace(/\/$/, ''),
         views:    it.videoPlayCount ?? it.playCount ?? it.videoViewCount ?? 0,
         likes:    it.likesCount     ?? it.likeCount  ?? 0,
         comments: it.commentsCount  ?? it.commentCount ?? 0,

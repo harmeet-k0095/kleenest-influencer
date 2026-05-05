@@ -74,6 +74,33 @@
     .reset-btn { margin-left: auto; padding: 6px 14px; background: #f0fdf4; border: 1.5px solid #86efac; color: #15803d; border-radius: 8px; cursor: pointer; font-size: .8rem; font-weight: 600; transition: all .2s; }
     .reset-btn:hover { background: #dcfce7; }
 
+    /* ── Batch Update Panel ── */
+    .batch-panel { background:#fff; border-radius:14px; padding:14px 18px; margin-bottom:16px; box-shadow:0 1px 8px rgba(0,0,0,.06); border-left:4px solid #16a34a; }
+    .batch-panel-header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .batch-panel-title { font-size:.82rem; font-weight:700; color:#111827; }
+    .batch-select { border:1.5px solid #e5e7eb; border-radius:8px; padding:5px 10px; font-size:.8rem; color:#374151; background:#f9fafb; cursor:pointer; outline:none; }
+    .batch-run-btn { padding:6px 18px; background:#16a34a; color:#fff; border:none; border-radius:8px; font-size:.82rem; font-weight:700; cursor:pointer; transition:background .2s; white-space:nowrap; }
+    .batch-run-btn:hover:not(:disabled) { background:#15803d; }
+    .batch-run-btn:disabled { background:#9ca3af; cursor:not-allowed; }
+    .batch-status { margin-top:10px; display:none; }
+    .batch-log { font-size:.75rem; color:#6b7280; background:#f9fafb; border-radius:8px; padding:8px 12px; max-height:120px; overflow-y:auto; font-family:monospace; line-height:1.6; }
+    .batch-log-line { margin:0; }
+    .batch-log-line.ok  { color:#16a34a; }
+    .batch-log-line.err { color:#dc2626; }
+
+    /* ── Aggregated Metrics Bar ── */
+    .metrics-bar { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px; }
+    .metric-chip { background:#fff; border-radius:12px; padding:12px 18px; box-shadow:0 1px 8px rgba(0,0,0,.06); flex:1; min-width:130px; text-align:center; border-top:3px solid #e5e7eb; transition:transform .2s; }
+    .metric-chip:hover { transform:translateY(-1px); }
+    .metric-chip.views    { border-top-color:#2563eb; }
+    .metric-chip.likes    { border-top-color:#dc2626; }
+    .metric-chip.comments { border-top-color:#7c3aed; }
+    .metric-chip.spend    { border-top-color:#16a34a; }
+    .metric-chip.cpv      { border-top-color:#d97706; }
+    .metric-chip-label { font-size:.65rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+    .metric-chip-value { font-size:1.25rem; font-weight:800; color:#111827; line-height:1.1; }
+    .metric-chip-sub { font-size:.65rem; color:#9ca3af; margin-top:2px; }
+
     /* ── KPI Cards ── */
     .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 22px; }
     .kpi-grid-4 { grid-template-columns: repeat(4, 1fr); }
@@ -156,6 +183,62 @@
     .poc-prog-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #16a34a, #4ade80); transition: width .7s ease; }
     .poc-pct { font-size: .72rem; color: #6b7280; }
 
+    /* ── Duplicates Card ── */
+    .dup-card { background:#fff; border-radius:14px; border:1.5px solid #fde68a; border-left:4px solid #f59e0b; margin-bottom:18px; box-shadow:0 1px 6px rgba(0,0,0,.05); overflow:hidden; }
+    .dup-card-header { display:flex; align-items:center; gap:10px; padding:14px 20px; cursor:pointer; user-select:none; flex-wrap:wrap; }
+    .dup-card-header:hover { background:#fffbeb; }
+    .dup-card-title { font-size:.88rem; font-weight:700; color:#92400e; flex:1; }
+    .dup-badge { font-size:.7rem; font-weight:700; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px; }
+    .dup-chevron { font-size:.75rem; color:#b45309; transition:transform .2s; }
+    .dup-chevron.open { transform: rotate(180deg); }
+    .dup-body { padding:0 20px 16px; border-top:1px solid #fef3c7; display:none; }
+    .dup-body.open { display:block; }
+    .dup-table { width:100%; border-collapse:collapse; font-size:.78rem; margin-top:12px; }
+    .dup-table th { text-align:left; color:#6b7280; font-weight:600; border-bottom:1.5px solid #fef3c7; padding:5px 8px; white-space:nowrap; }
+    .dup-table td { padding:6px 8px; border-bottom:1px solid #fafafa; color:#1a1a2e; vertical-align:top; }
+    .dup-table tr:last-child td { border-bottom:none; }
+    .dup-table tr:hover td { background:#fffbeb; }
+    .dup-count { display:inline-block; font-size:.68rem; font-weight:700; background:#fef3c7; color:#b45309; padding:1px 6px; border-radius:8px; }
+
+    /* ── Creator Tiers ── */
+    .tier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .tier-card { background: #fff; border-radius: 16px; border: 1.5px solid #e5e7eb; padding: 22px; box-shadow: 0 1px 4px rgba(0,0,0,.06); cursor: pointer; transition: box-shadow .15s, transform .15s; }
+    .tier-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); transform: translateY(-2px); }
+    .tier-card.active-tier { box-shadow: 0 0 0 2.5px currentColor; }
+    .tier-card.star.active-tier { box-shadow: 0 0 0 2.5px #eab308; }
+    .tier-card.superstar.active-tier { box-shadow: 0 0 0 2.5px #16a34a; }
+    .tier-card.lowperf.active-tier { box-shadow: 0 0 0 2.5px #dc2626; }
+    .tier-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .tier-card-icon { font-size: 1.5rem; }
+    .tier-card-title { font-size: 1rem; font-weight: 700; color: #1a1a2e; }
+    .tier-card-sub { font-size: .75rem; color: #6b7280; margin-bottom: 14px; }
+    .tier-card-count { display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 9px; border-radius: 10px; margin-bottom: 12px; }
+    .tier-card.star .tier-card-count { background: #fef9c3; color: #854d0e; }
+    .tier-card.superstar .tier-card-count { background: #dcfce7; color: #166534; }
+    .tier-card.lowperf .tier-card-count { background: #fee2e2; color: #991b1b; }
+    .tier-card { border-top: 4px solid #e5e7eb; }
+    .tier-card.star { border-top-color: #eab308; }
+    .tier-card.superstar { border-top-color: #16a34a; }
+    .tier-card.lowperf { border-top-color: #dc2626; }
+    .tier-rows { display: flex; flex-direction: column; gap: 8px; }
+    .tier-row { display: flex; justify-content: space-between; align-items: center; font-size: .82rem; }
+    .tier-row-label { color: #6b7280; }
+    .tier-row-value { font-weight: 600; color: #1a1a2e; }
+    .tier-card-chevron { float: right; font-size: .8rem; color: #9ca3af; margin-top: -28px; }
+    /* Detail panel */
+    .tier-detail { background: #fff; border-radius: 16px; border: 1.5px solid #e5e7eb; padding: 24px; box-shadow: 0 1px 6px rgba(0,0,0,.07); }
+    .tier-detail-title { font-size: 1rem; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+    .tier-detail h4 { font-size: .82rem; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: .04em; margin: 20px 0 10px; }
+    .tier-detail h4:first-of-type { margin-top: 0; }
+    .tier-tbl { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    .tier-tbl th { text-align: left; font-weight: 600; color: #6b7280; border-bottom: 1.5px solid #f3f4f6; padding: 6px 10px; white-space: nowrap; }
+    .tier-tbl td { padding: 7px 10px; border-bottom: 1px solid #f9fafb; color: #1a1a2e; }
+    .tier-tbl tr:last-child td { border-bottom: none; }
+    .tier-tbl tr:hover td { background: #f9fafb; }
+    .tier-tbl .num { text-align: right; }
+    .tier-tbl .pct { text-align: right; font-size: .73rem; color: #9ca3af; }
+    .tier-tbl thead th.num { text-align: right; }
+
     /* ── Target Progress List (Live tab) ── */
     .target-list { display: flex; flex-direction: column; gap: 13px; max-height: 300px; overflow-y: auto; }
     .target-item {}
@@ -211,7 +294,7 @@
   </div>
   <div class="header-right">
     <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-    <span style="font-size:.75rem;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:16px;padding:4px 12px;font-weight:600;color:#fff;" id="period-badge">📅 April 2026</span>
+    <span style="font-size:.75rem;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:16px;padding:4px 12px;font-weight:600;color:#fff;" id="period-badge">📅 Loading…</span>
     <span class="last-updated" id="last-updated">Fetching…</span>
     <button id="refresh-btn" onclick="loadDashboard()">⟳ Refresh</button>
   </div>
@@ -224,6 +307,9 @@
   </button>
   <button class="tab-btn" onclick="switchTab('orders')" id="tab-orders">
     🛒 Orders Placed <span class="tab-indicator" id="tab-orders-count">—</span>
+  </button>
+  <button class="tab-btn" onclick="switchTab('tiers')" id="tab-tiers">
+    ⭐ Creator Tiers
   </button>
 </div>
 
@@ -251,16 +337,67 @@
       </div>
       <div class="filter-group">
         <label>From</label>
-        <input type="date" id="lv-date-from" oninput="applyLiveFilters()"
+        <input type="date" id="lv-date-from" oninput="applyLiveFilters()" onchange="applyLiveFilters()"
           style="border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:.82rem;color:#374151;background:#f9fafb;outline:none;" />
       </div>
       <div class="filter-group">
         <label>To</label>
-        <input type="date" id="lv-date-to" oninput="applyLiveFilters()"
+        <input type="date" id="lv-date-to" oninput="applyLiveFilters()" onchange="applyLiveFilters()"
           style="border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:.82rem;color:#374151;background:#f9fafb;outline:none;" />
       </div>
       <button class="reset-btn" onclick="resetLiveFilters()">Reset</button>
     </div>
+
+    <!-- Batch Update Panel -->
+    <div class="batch-panel" id="batch-panel">
+      <div class="batch-panel-header">
+        <span class="batch-panel-title">📥 Update Sheet Metrics</span>
+        <span style="font-size:.74rem;color:#6b7280;" id="batch-empty-count"></span>
+        <select class="batch-select" id="batch-sheet-type" onchange="loadEmptyRowCount()">
+          <option value="inhouse">🏠 In-house Sheet</option>
+          <option value="agency">🏢 Agency Sheet</option>
+        </select>
+        <select class="batch-select" id="batch-limit">
+          <option value="25">25 rows</option>
+          <option value="50" selected>50 rows</option>
+          <option value="100">100 rows</option>
+        </select>
+        <button class="batch-run-btn" id="batch-run-btn" onclick="runBatchUpdate()">▶ Run Batch</button>
+      </div>
+      <div class="batch-status" id="batch-status">
+        <div class="batch-log" id="batch-log"></div>
+      </div>
+    </div>
+
+    <!-- Aggregated Metrics Bar -->
+    <div class="metrics-bar" id="metrics-bar">
+      <div class="metric-chip views">
+        <div class="metric-chip-label">👁 Total Views</div>
+        <div class="metric-chip-value" id="agg-views">—</div>
+        <div class="metric-chip-sub">from sheet</div>
+      </div>
+      <div class="metric-chip likes">
+        <div class="metric-chip-label">❤️ Total Likes</div>
+        <div class="metric-chip-value" id="agg-likes">—</div>
+      </div>
+      <div class="metric-chip comments">
+        <div class="metric-chip-label">💬 Total Comments</div>
+        <div class="metric-chip-value" id="agg-comments">—</div>
+      </div>
+      <div class="metric-chip spend">
+        <div class="metric-chip-label">💰 Total Spend</div>
+        <div class="metric-chip-value" id="agg-spend">—</div>
+        <div class="metric-chip-sub">reel + product</div>
+      </div>
+      <div class="metric-chip cpv">
+        <div class="metric-chip-label">📊 Avg CPV</div>
+        <div class="metric-chip-value" id="agg-cpv">—</div>
+        <div class="metric-chip-sub">spend ÷ views</div>
+      </div>
+    </div>
+
+    <!-- Duplicate Influencers Card -->
+    <div class="dup-card" id="dup-card" style="display:none"></div>
 
     <!-- KPIs -->
     <!-- Row 1: Reels + Influencers + SKUs + Overall Payout -->
@@ -297,7 +434,7 @@
     <!-- Row 2: In-house Payout + Agency Payout side-by-side -->
     <div class="kpi-grid mb20" style="grid-template-columns:1fr 1fr;gap:16px;">
       <!-- In-house payout -->
-      <div class="kpi-card" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;">
+      <div id="lv-kpi-inhouse-card" class="kpi-card" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #86efac;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="font-size:1.2rem;">🏠</span>
           <span style="font-size:.8rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;">In-house Payout</span>
@@ -310,7 +447,7 @@
         </div>
       </div>
       <!-- Agency payout with TTC + INK breakdown -->
-      <div class="kpi-card" style="background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1.5px solid #c4b5fd;">
+      <div id="lv-kpi-agency-card" class="kpi-card" style="background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1.5px solid #c4b5fd;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="font-size:1.2rem;">🏢</span>
           <span style="font-size:.8rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;">Agency Payout</span>
@@ -419,6 +556,9 @@
       </div>
     </div>
 
+    <!-- Overall Order Targets -->
+    <div id="or-overall-targets" style="margin-bottom:20px"></div>
+
     <!-- Team Overview -->
     <div class="card">
       <div class="section-title">👥 Team Overview — Orders vs Target</div>
@@ -449,6 +589,21 @@
     </div>
 
   </div><!-- /panel-orders -->
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 3 — CREATOR TIERS
+  ══════════════════════════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-tiers">
+    <!-- Filter bar -->
+    <div class="filters" style="margin-bottom:20px;">
+      <div class="filter-group"><label>Month</label><select id="ct-month" onchange="applyTierFilters()"><option value="">All Months</option></select></div>
+      <div class="filter-group"><label>SKU</label><select id="ct-sku" onchange="applyTierFilters()"><option value="">All SKUs</option></select></div>
+      <div class="filter-group"><label>Type</label><select id="ct-type" onchange="applyTierFilters()"><option value="">All</option><option value="inhouse">In-house</option><option value="agency">Agency</option></select></div>
+      <button class="reset-btn" onclick="resetTierFilters()">Reset</button>
+    </div>
+    <div class="tier-grid" id="tier-grid"></div>
+    <div class="tier-detail" id="tier-detail" style="display:none"></div>
+  </div><!-- /panel-tiers -->
 
 </main>
 
@@ -496,8 +651,22 @@ async function loadDashboard() {
       'Updated ' + new Date(RAW.lastUpdated).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
     populateFilters();
+
+    // Auto-select the target month so all views default to current month's data
+    if (RAW.targetMonth) {
+      const badge = document.getElementById('period-badge');
+      if (badge) badge.textContent = '📅 ' + monthLabel(RAW.targetMonth);
+      const lvMonth = document.getElementById('lv-month');
+      if (lvMonth && [...lvMonth.options].some(o => o.value === RAW.targetMonth))
+        lvMonth.value = RAW.targetMonth;
+      const orMonth = document.getElementById('or-month');
+      if (orMonth && [...orMonth.options].some(o => o.value === RAW.targetMonth))
+        orMonth.value = RAW.targetMonth;
+    }
+
     applyLiveFilters();
     applyOrderFilters();
+    loadEmptyRowCount();
 
     document.getElementById('loading').style.display = 'none';
     document.querySelectorAll('.tab-panel').forEach(p => p.style.display = '');
@@ -527,9 +696,9 @@ function populateFilters() {
   const lvProducts = [...new Set(lvLive.map(i => i.product).filter(Boolean))].sort();
   const lvBrands   = [...new Set(lvLive.map(i => i.brand).filter(Boolean))].sort();
 
-  // Derive available months from all dated rows (inhouse + agency)
+  // Derive available months from all dated rows — inhouse uses liveDate, agency uses closingMonthYM
   const months = [...new Set(
-    allLive.map(i => i.liveDate).filter(Boolean).map(d => d.slice(0, 7))
+    allLive.map(i => i.closingMonthYM || (i.liveDate ? i.liveDate.slice(0, 7) : null)).filter(Boolean)
   )].sort().reverse();  // newest first
 
   fill('lv-product', lvProducts);
@@ -587,12 +756,15 @@ function applyLiveFilters() {
     if (fTo   && d > fTo)   return false;
     return true;
   };
-  const passDateAgency = (d) => {
+  // Agency rows use closingMonthYM (from "Closing Month" column) as their month signal.
+  // Fall back to liveDate if present. Rows with neither are always included.
+  const passDateAgency = (d, closingMonthYM) => {
     if (!dateFilterActive) return true;
-    if (!d) return true;                            // no date on agency rows → always include
-    if (fM && d.slice(0, 7) !== fM) return false;
-    if (fFrom && d < fFrom) return false;
-    if (fTo   && d > fTo)   return false;
+    const effectiveYM = (d ? d.slice(0, 7) : null) || closingMonthYM || null;
+    if (!effectiveYM) return true;                  // truly unknown date → include
+    if (fM    && effectiveYM !== fM)  return false;
+    if (fFrom && d && d < fFrom)      return false;
+    if (fTo   && d && d > fTo)        return false;
     return true;
   };
 
@@ -616,7 +788,7 @@ function applyLiveFilters() {
       if (!i.liveLink || !isSocialLink(i.liveLink)) return false;
       if (fP && i.product !== fP) return false;
       if (fB && i.brand   !== fB) return false;
-      if (!passDateAgency(i.liveDate)) return false;
+      if (!passDateAgency(i.liveDate, i.closingMonthYM)) return false;
       return true;
     })
     .map(i => ({ ...i, category: 'agency' }));
@@ -631,6 +803,9 @@ function applyLiveFilters() {
   renderLiveKPIs();
   renderLiveCharts();
   renderLiveTargets();
+  renderMetricsBar();
+  renderDuplicatesCard();
+  renderCreatorTiers();
   lvPage = 1;
   renderLiveTable();
 }
@@ -659,6 +834,7 @@ function applyOrderFilters() {
   const pocTotal = Object.values(RAW.pocOrders || {}).reduce((s, v) => s + v, 0);
   document.getElementById('tab-orders-count').textContent = isOrderFiltered() ? OR_FILTERED.length : (pocTotal || OR_FILTERED.length);
   renderOrderKPIs();
+  renderOrderTargets();
   renderPOCCards();
   renderSKUGrid();
   renderSKUChart();
@@ -683,21 +859,30 @@ function renderLiveKPIs() {
   const k       = RAW.kpis;
   const overall = RAW.overallTargets || {};
   const fT = document.getElementById('lv-type').value;
+  const fM = document.getElementById('lv-month').value;
+
+  // Pick targets for the selected month; fall back to current-month overall targets
+  const monthT            = (RAW.monthlyTargets || {})[fM] || overall;
+  const agencyReelTarget  = monthT.agencyReelTarget  || overall.agencyReelTarget  || 710;
+  const inhouseReelTarget = monthT.inhouseReelTarget || overall.inhouseReelTarget || 525;
+  const totalReelTarget   = inhouseReelTarget + agencyReelTarget;
+
+  // Show/hide payout cards based on type filter
+  document.getElementById('lv-kpi-inhouse-card').style.display = fT === 'agency'  ? 'none' : '';
+  document.getElementById('lv-kpi-agency-card').style.display  = fT === 'inhouse' ? 'none' : '';
 
   // Always split LV_FILTERED by category — payouts are ALWAYS derived from filtered rows.
-  // This ensures product / brand / type filters all produce consistent numbers.
   const ihRows  = LV_FILTERED.filter(i => i.category === 'inhouse');
   const agRows  = LV_FILTERED.filter(i => i.category === 'agency');
   const ttcRows = agRows.filter(i => i.agency === 'TTC');
   const inkRows = agRows.filter(i => i.agency === 'INK REVENUE');
   const sum = (arr, field) => arr.reduce((s, i) => s + (i[field] || 0), 0);
 
-  // ── Reels Gone Live KPI ──────────────────────────────────────────────────────
-  // Count: always match the table rows visible.
+  // ── Reels Gone Live KPI ─────────────────────────────────────────────────────
   const actual  = LV_FILTERED.length;
-  const target  = fT === 'agency'  ? (overall.agencyReelTarget  || 660)
-                : fT === 'inhouse' ? (overall.inhouseReelTarget  || 400)
-                :                    (overall.totalReelTarget    || 1060);
+  const target  = fT === 'agency'  ? agencyReelTarget
+                : fT === 'inhouse' ? inhouseReelTarget
+                :                    totalReelTarget;
 
   const products = [...new Set(LV_FILTERED.map(i => i.product).filter(Boolean))];
   document.getElementById('lv-kpi-live-actual').textContent = actual.toLocaleString('en-IN');
@@ -782,23 +967,80 @@ function renderLiveCharts() {
 }
 
 function renderLiveTargets() {
-  const overall           = RAW.overallTargets || {};
-  const agencyReelTarget  = overall.agencyReelTarget  || 660;
-  const inhouseReelTarget = overall.inhouseReelTarget || 400;
-  const totalReelTarget   = agencyReelTarget + inhouseReelTarget;
+  const overall  = RAW.overallTargets || {};
+  const fT       = document.getElementById('lv-type').value;
+  const fM       = document.getElementById('lv-month').value;
+  const filtered = isLiveFiltered();
 
-  const fT = document.getElementById('lv-type').value;
+  // Pick targets for the selected month; fall back to current-month overall targets
+  const monthT            = (RAW.monthlyTargets || {})[fM] || overall;
+  const agencyReelTarget  = monthT.agencyReelTarget  || overall.agencyReelTarget  || 710;
+  const inhouseReelTarget = monthT.inhouseReelTarget || overall.inhouseReelTarget || 525;
+  const totalReelTarget   = inhouseReelTarget + agencyReelTarget;
+  const agencyTtcTarget   = monthT.agencyTtcTarget   || 0;
+  const agencyInkTarget   = monthT.agencyInkTarget   || 0;
 
-  // Real actuals from server
-  const agencyActuals  = RAW.kpis.agencyReelsLive  || 0;
-  const inhouseActuals = RAW.kpis.reelsLive         || 0;
-  const totalActuals   = RAW.kpis.combinedReelsLive || (agencyActuals + inhouseActuals);
+  // Split LV_FILTERED by category so all counts reflect active filters
+  const ihRows  = LV_FILTERED.filter(i => i.category === 'inhouse');
+  const agRows  = LV_FILTERED.filter(i => i.category === 'agency');
+  const ttcRows = agRows.filter(i => i.agency === 'TTC');
+  const inkRows = agRows.filter(i => i.agency === 'INK REVENUE');
+
+  // Actuals: use LV_FILTERED counts when a filter is active, else server KPIs
+  const agencyActuals  = filtered ? agRows.length  : (RAW.kpis.agencyReelsLive  || 0);
+  const inhouseActuals = filtered ? ihRows.length  : (RAW.kpis.reelsLive        || 0);
+  const ttcActuals     = filtered ? ttcRows.length : (RAW.kpis.ttcReelsLive     || 0);
+  const inkActuals     = filtered ? inkRows.length : (RAW.kpis.inkReelsLive     || 0);
+  const totalActuals   = agencyActuals + inhouseActuals;
+
+  // SKU actuals — computed from LV_FILTERED when filter active, else server maps
+  const buildSkuMap = rows => { const m={}; rows.forEach(r=>{if(r.product) m[r.product]=(m[r.product]||0)+1;}); return m; };
 
   const totalPct   = totalReelTarget  > 0 ? Math.min(Math.round(totalActuals  / totalReelTarget  * 100), 100) : 0;
   const inhousePct = inhouseReelTarget > 0 ? Math.min(Math.round(inhouseActuals / inhouseReelTarget * 100), 100) : 0;
 
-  // ── Overall bar ──
+  // ── Overall bar + split cards (respects type filter) ──
+  const agencyCard = fT !== 'inhouse' ? `
+    <div style="padding:14px 18px;background:#faf5ff;border-radius:10px;border:1.5px solid #e9d5ff;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:.75rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;">🏢 Agency</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:1.5rem;font-weight:800;color:#111827;">${agencyActuals.toLocaleString('en-IN')}</span>
+        <span style="font-size:.8rem;color:#9ca3af;">/ ${agencyReelTarget} target</span>
+      </div>
+      <div class="ot-bar-bg" style="background:#ede9fe;"><div style="height:100%;width:${Math.min(Math.round(agencyActuals/agencyReelTarget*100),100)}%;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:4px;transition:width .5s;"></div></div>
+      <div style="font-size:.72rem;color:#7c3aed;margin-top:6px;font-weight:600;">${Math.min(Math.round(agencyActuals/agencyReelTarget*100),100)}% achieved</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;">
+        <div style="background:#fff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 8px;">
+          <div style="font-size:.65rem;font-weight:700;color:#7c3aed;margin-bottom:2px;">TTC</div>
+          <div style="font-size:.85rem;font-weight:700;color:#111827;">${ttcActuals} <span style="font-size:.7rem;color:#9ca3af;font-weight:400">/ ${agencyTtcTarget||'—'}</span></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 8px;">
+          <div style="font-size:.65rem;font-weight:700;color:#a78bfa;margin-bottom:2px;">Ink Revenue</div>
+          <div style="font-size:.85rem;font-weight:700;color:#111827;">${inkActuals} <span style="font-size:.7rem;color:#9ca3af;font-weight:400">/ ${agencyInkTarget||'—'}</span></div>
+        </div>
+      </div>
+    </div>` : '';
+
+  const inhouseCard = fT !== 'agency' ? `
+    <div style="padding:14px 18px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:.75rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;">🏠 In-house Team</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:1.5rem;font-weight:800;color:#111827;">${inhouseActuals.toLocaleString('en-IN')}</span>
+        <span style="font-size:.8rem;color:#9ca3af;">/ ${inhouseReelTarget} target</span>
+      </div>
+      <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div></div>
+      <div style="font-size:.72rem;color:#15803d;margin-top:6px;font-weight:600;">${inhousePct}% achieved</div>
+    </div>` : '';
+
+  // When both types shown, render overall bar + two side-by-side cards
+  // When single type, render just that card (full-width)
+  const showBoth = fT === '';
   document.getElementById('lv-overall-reel').innerHTML = `
+    ${showBoth ? `
     <div style="padding:14px 18px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0;margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:.8rem;font-weight:700;color:#374151;">🎬 Overall Live Reels</span>
@@ -806,54 +1048,19 @@ function renderLiveTargets() {
       </div>
       <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div></div>
       <div style="font-size:.73rem;color:#6b7280;margin-top:4px;">${totalPct}% of combined target</div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-
-      <!-- Agency card -->
-      <div style="padding:14px 18px;background:#faf5ff;border-radius:10px;border:1.5px solid #e9d5ff;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span style="font-size:.75rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;">🏢 Agency</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <span style="font-size:1.5rem;font-weight:800;color:#111827;">${agencyActuals.toLocaleString('en-IN')}</span>
-          <span style="font-size:.8rem;color:#9ca3af;">/ ${agencyReelTarget} target</span>
-        </div>
-        <div class="ot-bar-bg" style="background:#ede9fe;"><div style="height:100%;width:${Math.min(Math.round(agencyActuals/agencyReelTarget*100),100)}%;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:4px;transition:width .5s;"></div></div>
-        <div style="font-size:.72rem;color:#7c3aed;margin-top:6px;font-weight:600;">${Math.min(Math.round(agencyActuals/agencyReelTarget*100),100)}% achieved</div>
-        <!-- TTC + INK REVENUE sub-split -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;">
-          <div style="background:#fff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 8px;">
-            <div style="font-size:.65rem;font-weight:700;color:#7c3aed;margin-bottom:2px;">TTC</div>
-            <div style="font-size:.85rem;font-weight:700;color:#111827;">${(RAW.kpis.ttcReelsLive||0)}</div>
-          </div>
-          <div style="background:#fff;border:1px solid #e9d5ff;border-radius:6px;padding:5px 8px;">
-            <div style="font-size:.65rem;font-weight:700;color:#a78bfa;margin-bottom:2px;">Ink Revenue</div>
-            <div style="font-size:.85rem;font-weight:700;color:#111827;">${(RAW.kpis.inkReelsLive||0)}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- In-house card -->
-      <div style="padding:14px 18px;background:#f0fdf4;border-radius:10px;border:1.5px solid #bbf7d0;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span style="font-size:.75rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.5px;">🏠 In-house Team</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <span style="font-size:1.5rem;font-weight:800;color:#111827;">${inhouseActuals.toLocaleString('en-IN')}</span>
-          <span style="font-size:.8rem;color:#9ca3af;">/ ${inhouseReelTarget} target</span>
-        </div>
-        <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#16a34a,#4ade80);"></div></div>
-        <div style="font-size:.72rem;color:#15803d;margin-top:6px;font-weight:600;">${inhousePct}% achieved</div>
-      </div>
+    </div>` : ''}
+    <div style="display:grid;grid-template-columns:${showBoth ? '1fr 1fr' : '1fr'};gap:14px;">
+      ${agencyCard}
+      ${inhouseCard}
     </div>`;
 
   // ── Agency SKU targets vs actuals ─────────────────────────────────────────
   const ttcTargets      = RAW.ttcSkuLiveTargets   || {};
   const inkTargets      = RAW.inkSkuLiveTargets    || {};
-  const agencyActualsMap= RAW.agencySkuActuals     || {};
-  const ttcActualsMap   = RAW.ttcSkuActuals         || {};
-  const inkActualsMap   = RAW.inkSkuActuals         || {};
+  // When a filter is active, compute SKU actuals from LV_FILTERED; else use server maps
+  const agencyActualsMap= filtered ? buildSkuMap(agRows)  : (RAW.agencySkuActuals  || {});
+  const ttcActualsMap   = filtered ? buildSkuMap(ttcRows) : (RAW.ttcSkuActuals     || {});
+  const inkActualsMap   = filtered ? buildSkuMap(inkRows) : (RAW.inkSkuActuals     || {});
   const selProd         = document.getElementById('lv-product').value;
 
   const normCase = s => String(s||'').trim().toLowerCase();
@@ -917,7 +1124,7 @@ function renderLiveTargets() {
   }
 
   // ── In-house section — actuals by product, canonical names now match ──────
-  const inhouseActualsMap = RAW.inhouseSkuActuals || {};
+  const inhouseActualsMap = filtered ? buildSkuMap(ihRows) : (RAW.inhouseSkuActuals || {});
   const inhouseActualEntries = Object.entries(inhouseActualsMap)
     .filter(([key]) => !selProd || normCase(key) === normCase(selProd))
     .sort((a, b) => b[1] - a[1]);
@@ -959,59 +1166,71 @@ function renderOrderKPIs() {
   document.getElementById('or-kpi-orders-sub').textContent = filtered ? 'Filtered view' : 'Across all team members';
 }
 
-function renderOrderTargets() {
-  const filtered      = isOrderFiltered();
-  const pocOrders     = RAW.pocOrders || {};
-  const overall       = RAW.overallTargets || {};
-  const orderTarget   = 1015;
-  const agencyTarget  = 660;
-  const inhouseTarget = 400;
+// Helper: "May 2026" from "2026-05"
+function monthLabelStr(ym) {
+  if (!ym) return '';
+  const [y, m] = ym.split('-');
+  const names = ['January','February','March','April','May','June',
+                 'July','August','September','October','November','December'];
+  return (names[parseInt(m,10)-1]||m) + ' ' + y;
+}
 
-  const agencyActual  = filtered ? OR_FILTERED.filter(i=>i.poc==='Priyanka').length : (pocOrders['Priyanka']||0);
-  const inhouseActual = filtered
-    ? OR_FILTERED.filter(i=>['Mohit','Hardev','Satyam'].includes(i.poc)).length
-    : ((pocOrders['Mohit']||0)+(pocOrders['Hardev']||0)+(pocOrders['Satyam']||0));
+function renderOrderTargets() {
+  const fM        = document.getElementById('or-month').value;
+  const overall   = RAW.overallTargets || {};
+  // Use month-specific data if available; else fall back to server defaults
+  const monthT    = (RAW.monthlyTargets || {})[fM] || {};
+  const pocOrders = monthT.pocOrders || RAW.pocOrders || {};
+
+  const orderTarget   = monthT.overallOrderTarget  || overall.orderTarget  || 1020;
+  const teamTargets   = monthT.teamTargets || RAW.teamTargets || {};
+  const agencyTarget  = teamTargets['Priyanka'] || 0;
+  const inhouseTarget = (teamTargets['Mohit']||0) + (teamTargets['Hardev']||0) + (teamTargets['Satyam']||0);
+
+  const agencyActual  = pocOrders['Priyanka'] || 0;
+  const inhouseActual = (pocOrders['Mohit']||0) + (pocOrders['Hardev']||0) + (pocOrders['Satyam']||0);
   const totalActual   = agencyActual + inhouseActual;
 
-  const totalPct   = Math.min(Math.round(totalActual  /orderTarget  *100),100);
-  const agencyPct  = Math.min(Math.round(agencyActual /agencyTarget *100),100);
-  const inhousePct = Math.min(Math.round(inhouseActual/inhouseTarget*100),100);
+  const totalPct   = orderTarget   > 0 ? Math.min(Math.round(totalActual  /orderTarget  *100),100) : 0;
+  const agencyPct  = agencyTarget  > 0 ? Math.min(Math.round(agencyActual /agencyTarget *100),100) : 0;
+  const inhousePct = inhouseTarget > 0 ? Math.min(Math.round(inhouseActual/inhouseTarget*100),100) : 0;
 
-  document.getElementById('or-overall-targets').innerHTML = `
-    <div class="ot-card">
-      <div class="ot-label">🎬 Overall Reel Target</div>
-      <div class="ot-nums">${(filtered?OR_FILTERED.length:(overall.actualReels||0)).toLocaleString('en-IN')} <span>/ ${(overall.reelTarget||0).toLocaleString('en-IN')} target</span></div>
-      <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${Math.min(Math.round((filtered?OR_FILTERED.length:(overall.actualReels||0))/(overall.reelTarget||1)*100),100)}%;background:linear-gradient(90deg,#16a34a,#4ade80)"></div></div>
-      <div class="ot-pct">${Math.min(Math.round((filtered?OR_FILTERED.length:(overall.actualReels||0))/(overall.reelTarget||1)*100),100)}% achieved</div>
-    </div>
+  const label = monthLabelStr(fM || RAW.targetMonth || '');
+
+  const orTargetEl = document.getElementById('or-overall-targets');
+  if (!orTargetEl) return;
+  orTargetEl.innerHTML = `
     <div class="ot-card blue-card">
-      <div class="ot-label" style="color:#2563eb">🛒 Overall Order Target</div>
+      <div class="ot-label" style="color:#2563eb">🛒 Overall Order Target${label ? ' — ' + label : ''}</div>
       <div class="ot-nums">${totalActual.toLocaleString('en-IN')} <span>/ ${orderTarget.toLocaleString('en-IN')} target</span></div>
       <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
       <div class="ot-pct" style="color:#3b82f6">${totalPct}% achieved</div>
       <div class="ot-split">
         <div class="ot-split-item">
           <div class="ot-split-label" style="color:#7c3aed">🏢 Agency (Priyanka)</div>
-          <div class="ot-split-num">${agencyActual} <span>/ ${agencyTarget}</span></div>
-          <div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${agencyPct}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
-          <div class="ot-split-pct" style="color:#7c3aed">${agencyPct}%</div>
+          <div class="ot-split-num">${agencyActual} <span>/ ${agencyTarget||'—'}</span></div>
+          ${agencyTarget > 0 ? `<div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${agencyPct}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
+          <div class="ot-split-pct" style="color:#7c3aed">${agencyPct}%</div>` : ''}
         </div>
         <div class="ot-split-item">
           <div class="ot-split-label" style="color:#0d9488">🏠 In-house Team</div>
-          <div class="ot-split-num">${inhouseActual} <span>/ ${inhouseTarget}</span></div>
-          <div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#0d9488,#34d399)"></div></div>
-          <div class="ot-split-pct" style="color:#0d9488">${inhousePct}%</div>
+          <div class="ot-split-num">${inhouseActual} <span>/ ${inhouseTarget||'—'}</span></div>
+          ${inhouseTarget > 0 ? `<div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#0d9488,#34d399)"></div></div>
+          <div class="ot-split-pct" style="color:#0d9488">${inhousePct}%</div>` : ''}
         </div>
       </div>
     </div>`;
 }
 
 function renderPOCCards() {
-  const filtered    = isOrderFiltered();
-  const pocOrders   = RAW.pocOrders   || {};
-  const pocSkuOrders= RAW.pocSkuOrders || {};
-  const teamTargets = RAW.teamTargets || {};
-  const POC_ORDER   = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+  const filtered     = isOrderFiltered();
+  const fM           = document.getElementById('or-month').value;
+  // Use month-specific pocOrders + teamTargets when a month is selected
+  const monthT       = (RAW.monthlyTargets || {})[fM] || {};
+  const pocOrders    = monthT.pocOrders    || RAW.pocOrders    || {};
+  const pocSkuOrders = monthT.pocSkuOrders || RAW.pocSkuOrders || {};
+  const teamTargets  = monthT.teamTargets  || RAW.teamTargets  || {};
+  const POC_ORDER    = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
   const selSku      = (document.getElementById('or-product') || {}).value || '';
 
   // Always count from OR_FILTERED when a filter is active; otherwise use pre-aggregated server counts.
@@ -1381,6 +1600,433 @@ function shortLabel(s) {
     'Tile & Floor Cleaner':    'Tile & Floor',
   };
   return m[s] || (s.length > 14 ? s.slice(0, 13) + '…' : s);
+}
+
+// ── Aggregated Metrics Bar ────────────────────────────────────────────────────
+function fmtNum(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'K';
+  return n.toLocaleString('en-IN');
+}
+
+function renderMetricsBar() {
+  const rows         = LV_FILTERED;
+  const totalViews   = rows.reduce((s, i) => s + (i.views    || 0), 0);
+  const totalLikes   = rows.reduce((s, i) => s + (i.likes    || 0), 0);
+  const totalComments= rows.reduce((s, i) => s + (i.comments || 0), 0);
+  const totalSpend   = rows.reduce((s, i) => s + (i.reelAmt  || 0) + (i.productAmt || 0), 0);
+  const aggCPV       = totalViews > 0 ? totalSpend / totalViews : null;
+
+  document.getElementById('agg-views').textContent    = totalViews    ? fmtNum(totalViews)    : '—';
+  document.getElementById('agg-likes').textContent    = totalLikes    ? fmtNum(totalLikes)    : '—';
+  document.getElementById('agg-comments').textContent = totalComments ? fmtNum(totalComments) : '—';
+  document.getElementById('agg-spend').textContent    = totalSpend    ? '₹' + fmtNum(totalSpend) : '—';
+  document.getElementById('agg-cpv').textContent      = aggCPV != null ? '₹' + aggCPV.toFixed(2) : '—';
+}
+
+// ── Duplicate Influencers ─────────────────────────────────────────────────────
+function renderDuplicatesCard() {
+  const card = document.getElementById('dup-card');
+
+  // Group rows by username (case-insensitive) + month (YYYY-MM)
+  const groupMap = {};
+  LV_FILTERED.forEach(row => {
+    const name  = (row.username || '').trim().toLowerCase();
+    if (!name) return;
+    const month = row.liveDate ? row.liveDate.slice(0, 7) : 'unknown';
+    const key   = `${name}||${month}`;
+    if (!groupMap[key]) groupMap[key] = { username: row.username, month, rows: [] };
+    groupMap[key].rows.push(row);
+  });
+
+  // Keep only groups that appear more than once in the same month
+  const dups = Object.values(groupMap)
+    .filter(g => g.rows.length > 1)
+    .sort((a, b) => b.rows.length - a.rows.length || a.username.localeCompare(b.username));
+
+  if (!dups.length) {
+    card.style.display = 'none';
+    return;
+  }
+
+  const monthLabel = ym => {
+    if (!ym || ym === 'unknown') return '—';
+    const [y, m] = ym.split('-');
+    const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return (names[parseInt(m,10)-1] || m) + ' ' + y;
+  };
+
+  const rows = dups.map(g => {
+    const products = [...new Set(g.rows.map(r => r.product).filter(Boolean))].join(', ') || '—';
+    const pocs     = [...new Set(g.rows.map(r => r.poc).filter(Boolean))].join(', ') || '—';
+    const payout   = g.rows.reduce((s, r) => s + ((r.reelAmt||0)+(r.productAmt||0)), 0);
+    return `<tr>
+      <td><strong>@${g.rows[0].username}</strong></td>
+      <td>${monthLabel(g.month)}</td>
+      <td><span class="dup-count">${g.rows.length}×</span></td>
+      <td>${products}</td>
+      <td>${pocs}</td>
+      <td style="text-align:right">₹${fmtNum(payout)}</td>
+    </tr>`;
+  }).join('');
+
+  // Preserve open/closed state across re-renders
+  const wasOpen = card.querySelector('.dup-body.open') !== null;
+
+  card.style.display = 'block';
+  card.innerHTML = `
+    <div class="dup-card-header" onclick="toggleDupCard()">
+      <span style="font-size:1.1rem">⚠️</span>
+      <span class="dup-card-title">Repeat Influencers — worked more than once in the same month</span>
+      <span class="dup-badge">${dups.length} flagged</span>
+      <span class="dup-chevron${wasOpen ? ' open' : ''}">▼</span>
+    </div>
+    <div class="dup-body${wasOpen ? ' open' : ''}">
+      <div style="overflow-x:auto">
+        <table class="dup-table">
+          <thead><tr>
+            <th>Username</th><th>Month</th><th>Times</th><th>Products</th><th>POC</th><th style="text-align:right">Total Payout</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function toggleDupCard() {
+  const body    = document.querySelector('.dup-body');
+  const chevron = document.querySelector('.dup-chevron');
+  if (!body) return;
+  body.classList.toggle('open');
+  chevron.classList.toggle('open');
+}
+
+// ── Creator Tiers ─────────────────────────────────────────────────────────────
+let TIER_DATA = [];   // enriched rows, rebuilt each filter change
+let ACTIVE_TIER = null;
+
+const TIER_DEFS = [
+  { id: 'star',      cls: 'star',      icon: '⭐', title: 'Star Creators',       sub: '100K – 500K views',  filter: r => r.views >= 100_000 && r.views < 500_000 },
+  { id: 'superstar', cls: 'superstar', icon: '🌟', title: 'Super Star Creators', sub: 'More than 500K views', filter: r => r.views >= 500_000 },
+  { id: 'lowperf',   cls: 'lowperf',  icon: '⚠️', title: 'Low Performing',      sub: 'CPV > ₹0.1',          filter: r => r.cpv != null && r.cpv > 0.1 },
+];
+
+function applyTierFilters() {
+  ACTIVE_TIER = null;
+  document.getElementById('tier-detail').style.display = 'none';
+  renderCreatorTiers();
+}
+
+function resetTierFilters() {
+  document.getElementById('ct-month').value = '';
+  document.getElementById('ct-sku').value   = '';
+  document.getElementById('ct-type').value  = '';
+  applyTierFilters();
+}
+
+function renderCreatorTiers() {
+  // Populate month + SKU dropdowns on first render
+  const ctMonthSel = document.getElementById('ct-month');
+  if (ctMonthSel && ctMonthSel.options.length <= 1) {
+    const allRows = [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])];
+    const months  = [...new Set(allRows.map(r => r.liveDate?.slice(0,7)).filter(Boolean))].sort().reverse();
+    months.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = new Date(m + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+      ctMonthSel.appendChild(opt);
+    });
+  }
+  const ctSkuSel = document.getElementById('ct-sku');
+  if (ctSkuSel && ctSkuSel.options.length <= 1) {
+    const allRows = [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])];
+    const skus    = [...new Set(allRows.map(r => r.product).filter(Boolean))].sort();
+    skus.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      ctSkuSel.appendChild(opt);
+    });
+  }
+
+  const ctMonth = (document.getElementById('ct-month')?.value || '');
+  const ctSku   = (document.getElementById('ct-sku')?.value   || '');
+  const ctType  = (document.getElementById('ct-type')?.value  || '');
+
+  // Filter the full combined dataset independently of the Live Status tab filters
+  const allLive = [...(RAW.influencers||[]).map(r => ({...r, category:'inhouse'})),
+                   ...(RAW.agencyInfluencers||[]).map(r => ({...r, category:'agency'}))];
+
+  const baseRows = allLive.filter(row => {
+    if (ctMonth) {
+      const rowYM = row.closingMonthYM || (row.liveDate ? row.liveDate.slice(0,7) : null);
+      if (rowYM && rowYM !== ctMonth) return false;
+    }
+    if (ctSku   && (row.product || '') !== ctSku) return false;
+    if (ctType  && row.category !== ctType)  return false;
+    return true;
+  });
+
+  TIER_DATA = baseRows.map(row => {
+    const key = normaliseUrl(row.liveLink);
+    const m   = LIVE_METRICS[key];
+    const views    = (m ? m.views    : null) ?? row.views    ?? 0;
+    const likes    = (m ? m.likes    : null) ?? row.likes    ?? 0;
+    const comments = (m ? m.comments : null) ?? row.comments ?? 0;
+    const payout   = (row.reelAmt || 0) + (row.productAmt || 0);
+    const cpv      = views > 0 ? payout / views : null;
+    return { ...row, views, likes, comments, payout, cpv };
+  });
+
+  const grid = document.getElementById('tier-grid');
+  grid.innerHTML = TIER_DEFS.map(tier => {
+    const rows        = TIER_DATA.filter(tier.filter);
+    const totalViews    = rows.reduce((s, r) => s + r.views,    0);
+    const totalLikes    = rows.reduce((s, r) => s + r.likes,    0);
+    const totalComments = rows.reduce((s, r) => s + r.comments, 0);
+    const totalPayout   = rows.reduce((s, r) => s + r.payout,   0);
+    const aggCPV        = totalViews > 0 ? totalPayout / totalViews : null;
+    const isActive      = ACTIVE_TIER === tier.id;
+
+    return `
+      <div class="tier-card ${tier.cls}${isActive ? ' active-tier' : ''}" onclick="openTierDetail('${tier.id}')">
+        <div class="tier-card-header">
+          <span class="tier-card-icon">${tier.icon}</span>
+          <span class="tier-card-title">${tier.title}</span>
+        </div>
+        <div class="tier-card-chevron">${isActive ? '▲' : '▼'}</div>
+        <div class="tier-card-sub">${tier.sub}</div>
+        <span class="tier-card-count">${rows.length} creator${rows.length !== 1 ? 's' : ''}</span>
+        <div class="tier-rows">
+          <div class="tier-row"><span class="tier-row-label">👁 Views</span><span class="tier-row-value">${totalViews ? fmtNum(totalViews) : '—'}</span></div>
+          <div class="tier-row"><span class="tier-row-label">❤️ Likes</span><span class="tier-row-value">${totalLikes ? fmtNum(totalLikes) : '—'}</span></div>
+          <div class="tier-row"><span class="tier-row-label">💬 Comments</span><span class="tier-row-value">${totalComments ? fmtNum(totalComments) : '—'}</span></div>
+          <div class="tier-row"><span class="tier-row-label">💰 Payout</span><span class="tier-row-value">${totalPayout ? '₹' + fmtNum(totalPayout) : '—'}</span></div>
+          <div class="tier-row" style="border-top:1px solid #f3f4f6;padding-top:8px;margin-top:2px"><span class="tier-row-label">📊 Avg CPV</span><span class="tier-row-value">${aggCPV != null ? '₹' + aggCPV.toFixed(2) : '—'}</span></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (ACTIVE_TIER) renderTierDetail(ACTIVE_TIER);
+}
+
+function openTierDetail(tierId) {
+  ACTIVE_TIER = ACTIVE_TIER === tierId ? null : tierId;
+  renderCreatorTiers();
+  const detail = document.getElementById('tier-detail');
+  if (!ACTIVE_TIER) { detail.style.display = 'none'; return; }
+  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderTierDetail(tierId) {
+  const tier  = TIER_DEFS.find(t => t.id === tierId);
+  const rows  = TIER_DATA.filter(tier.filter);
+  const detail = document.getElementById('tier-detail');
+  detail.style.display = 'block';
+
+  const totV = rows.reduce((s, r) => s + r.views,    0);
+  const totP = rows.reduce((s, r) => s + r.payout,   0);
+  const totC = rows.reduce((s, r) => s + r.views,    0); // reused for pct base
+
+  // ── POC breakdown ──
+  const pocMap = {};
+  rows.forEach(r => {
+    const poc = r.poc || 'Unknown';
+    if (!pocMap[poc]) pocMap[poc] = { count: 0, views: 0, likes: 0, comments: 0, payout: 0 };
+    pocMap[poc].count++;
+    pocMap[poc].views    += r.views;
+    pocMap[poc].likes    += r.likes;
+    pocMap[poc].comments += r.comments;
+    pocMap[poc].payout   += r.payout;
+  });
+  const pocs = Object.entries(pocMap).sort((a, b) => b[1].views - a[1].views);
+
+  const pct = (n, tot) => tot > 0 ? ((n / tot) * 100).toFixed(1) + '%' : '—';
+
+  const pocRows = pocs.map(([poc, p]) => `
+    <tr>
+      <td>${poc}</td>
+      <td class="num">${p.count}</td>
+      <td class="pct">${pct(p.count, rows.length)}</td>
+      <td class="num">${fmtNum(p.views)}</td>
+      <td class="pct">${pct(p.views, totV)}</td>
+      <td class="num">${fmtNum(p.likes)}</td>
+      <td class="num">${fmtNum(p.comments)}</td>
+      <td class="num">₹${fmtNum(p.payout)}</td>
+      <td class="pct">${pct(p.payout, totP)}</td>
+      <td class="num">${p.views > 0 ? '₹' + (p.payout / p.views).toFixed(2) : '—'}</td>
+    </tr>`).join('');
+
+  // ── Individual rows sorted by views desc ──
+  const sorted = [...rows].sort((a, b) => b.views - a.views);
+  const indivRows = sorted.map(r => {
+    const link = r.liveLink || r.url || '';
+    const linkCell = link
+      ? `<a href="${link}" target="_blank" rel="noopener" style="font-size:.72rem;color:#2563eb;text-decoration:none;white-space:nowrap;" title="${link}">🔗 Reel</a>`
+      : '—';
+    return `
+    <tr>
+      <td>${r.username || '—'}</td>
+      <td>${r.poc || '—'}</td>
+      <td style="font-size:.75rem;color:#6b7280;">${r.product || '—'}</td>
+      <td>${linkCell}</td>
+      <td class="num">${r.views ? fmtNum(r.views) : '—'}</td>
+      <td class="pct">${pct(r.views, totV)}</td>
+      <td class="num">${r.likes ? fmtNum(r.likes) : '—'}</td>
+      <td class="num">${r.comments ? fmtNum(r.comments) : '—'}</td>
+      <td class="num">₹${fmtNum(r.payout)}</td>
+      <td class="num">${r.cpv != null ? '₹' + r.cpv.toFixed(2) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  detail.innerHTML = `
+    <div class="tier-detail-title">${tier.icon} ${tier.title} — Breakdown</div>
+    <h4>By POC</h4>
+    <div style="overflow-x:auto">
+      <table class="tier-tbl">
+        <thead><tr>
+          <th>POC</th>
+          <th class="num">Creators</th><th class="pct">% of bucket</th>
+          <th class="num">Views</th><th class="pct">% of views</th>
+          <th class="num">Likes</th>
+          <th class="num">Comments</th>
+          <th class="num">Payout</th><th class="pct">% of payout</th>
+          <th class="num">CPV</th>
+        </tr></thead>
+        <tbody>${pocRows}</tbody>
+      </table>
+    </div>
+    <h4 style="margin-top:24px">All Creators in this tier</h4>
+    <div style="overflow-x:auto">
+      <table class="tier-tbl">
+        <thead><tr>
+          <th>Creator</th><th>POC</th>
+          <th>SKU</th><th>Reel</th>
+          <th class="num">Views</th><th class="pct">% of tier</th>
+          <th class="num">Likes</th><th class="num">Comments</th>
+          <th class="num">Payout</th><th class="num">CPV</th>
+        </tr></thead>
+        <tbody>${indivRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Load empty-row count on init ──────────────────────────────────────────────
+async function loadEmptyRowCount() {
+  try {
+    const sheetType = (document.getElementById('batch-sheet-type') || {}).value || 'inhouse';
+    const res  = await fetch(`/api/metrics/empty-rows?limit=1&type=${sheetType}`);
+    const data = await res.json();
+    const el   = document.getElementById('batch-empty-count');
+    if (el && data.totalEmpty != null) {
+      const count = sheetType === 'agency' ? data.agencyEmpty : data.inhouseEmpty;
+      el.textContent = count > 0
+        ? `${count} rows still need metrics`
+        : '✅ All rows have metrics';
+    }
+  } catch (e) { /* silent */ }
+}
+
+// ── Batch Update Orchestrator ─────────────────────────────────────────────────
+async function runBatchUpdate() {
+  const btn       = document.getElementById('batch-run-btn');
+  const limit     = parseInt(document.getElementById('batch-limit').value) || 50;
+  const sheetType = document.getElementById('batch-sheet-type').value; // 'inhouse' | 'agency'
+  const status    = document.getElementById('batch-status');
+  const log       = document.getElementById('batch-log');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+  status.style.display = 'block';
+  log.innerHTML = '';
+
+  function addLog(msg, type = '') {
+    const p = document.createElement('p');
+    p.className = 'batch-log-line' + (type ? ' ' + type : '');
+    p.textContent = msg;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  try {
+    // 1. Fetch empty rows for the selected sheet type
+    const sheetLabel = sheetType === 'agency' ? 'Agency (TTC + Ink Revenue)' : 'In-house';
+    addLog(`Fetching up to ${limit} empty rows from ${sheetLabel} sheet…`);
+    const emptyRes  = await fetch(`/api/metrics/empty-rows?limit=${limit}&type=${sheetType}`);
+    const emptyData = await emptyRes.json();
+    const rows      = emptyData.rows || [];
+
+    if (!rows.length) {
+      addLog('✅ No empty rows found — sheet is up to date!', 'ok');
+      document.getElementById('batch-empty-count').textContent = '✅ All rows have metrics';
+      return;
+    }
+    addLog(`Found ${rows.length} empty rows (${emptyData.totalEmpty} total). Starting Apify scrape…`);
+
+    // 2. Start Apify run
+    const urls     = rows.map(r => r.url);
+    const startRes = await fetch('/api/metrics/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls }),
+    });
+    const { runId } = await startRes.json();
+    if (!runId) throw new Error('Apify failed to start');
+    addLog(`Apify run started (ID: ${runId}). Polling…`);
+
+    // 3. Poll until done
+    let items = null;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise(r => setTimeout(r, 6000));
+      const poll = await fetch(`/api/metrics/result/${runId}`, { cache: 'no-store' });
+      const data  = await poll.json();
+      addLog(`  Status: ${data.status} (${(attempt + 1) * 6}s)`);
+      if (data.status === 'SUCCEEDED') { items = data.items; break; }
+      if (data.status === 'FAILED' || data.status === 'ABORTED') throw new Error(`Apify run ${data.status}`);
+    }
+    if (!items) throw new Error('Apify timed out');
+    addLog(`✅ Scraped ${items.length} posts. Writing to sheet…`);
+
+    // 4. Match items to rows
+    function scFromUrl(url) {
+      const m = String(url || '').match(/instagram\.com\/(?:p|reels?|tv)\/([A-Za-z0-9_-]+)/);
+      return m ? m[1] : null;
+    }
+    const metricsMap = {};
+    items.forEach(it => {
+      const sc = scFromUrl(it.url || '');
+      if (sc) metricsMap[sc] = { views: Math.max(0, it.views || 0), likes: Math.max(0, it.likes || 0), comments: Math.max(0, it.comments || 0) };
+    });
+
+    const updates = rows.map(r => {
+      const sc = scFromUrl(r.url);
+      const m  = sc ? metricsMap[sc] : null;
+      // IMPORTANT: include fileId + sheetName so write-sheet targets the correct sheet
+      return m ? {
+        excelRow: r.excelRow, viewsCol: r.viewsCol, likesCol: r.likesCol, commentsCol: r.commentsCol,
+        fileId: r.fileId, sheetName: r.sheetName,
+        ...m
+      } : null;
+    }).filter(Boolean);
+
+    // 5. Write to sheet
+    const writeRes  = await fetch('/api/metrics/write-sheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    const writeData = await writeRes.json();
+    addLog(`✅ Written to sheet: ${writeData.written} rows updated.`, 'ok');
+    if (writeData.errors?.length) addLog(`⚠ ${writeData.errors.length} write errors`, 'err');
+
+    // 6. Refresh empty count
+    await loadEmptyRowCount();
+
+  } catch (err) {
+    addLog(`❌ Error: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Run Batch';
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
