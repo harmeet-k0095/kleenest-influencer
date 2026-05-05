@@ -1337,7 +1337,9 @@ function renderSKUGrid() {
 }
 
 function renderSKUChart() {
-  const pocSkuOrders = RAW.pocSkuOrders || {};
+  const fM_chart    = (document.getElementById('or-month') || {}).value || '';
+  const monthT_chart = (RAW.monthlyTargets || {})[fM_chart] || {};
+  const pocSkuOrders = monthT_chart.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
   const POCS         = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
