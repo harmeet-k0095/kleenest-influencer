@@ -1392,6 +1392,16 @@ app.post('/api/metrics/start', async (req, res) => {
   const token = process.env.APIFY_TOKEN;
   if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
+  // Validate + sanitise URLs before sending to Apify
+  const validUrls = urls.filter(u => {
+    const s = String(u || '').trim();
+    if (!s.includes('instagram.com')) return false;
+    const path = s.replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '').split('?')[0].trim();
+    return path.length >= 3;
+  });
+  console.log(`[Apify start] ${validUrls.length} valid / ${urls.length} total URLs. First 5:`, validUrls.slice(0, 5));
+  if (validUrls.length === 0) return res.json({ runId: null, skipped: urls.length });
+
   try {
     const r = await fetch(
       `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${token}&memory=1024`,
@@ -1399,14 +1409,17 @@ app.post('/api/metrics/start', async (req, res) => {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          directUrls:   urls,
+          directUrls:   validUrls,
           resultsType:  'posts',
-          resultsLimit: urls.length,
+          resultsLimit: validUrls.length,
         }),
       }
     );
     const j = await r.json();
-    if (!j?.data?.id) return res.status(502).json({ error: 'Apify start failed', detail: j });
+    if (!j?.data?.id) {
+      console.error('[Apify start failed] HTTP', r.status, JSON.stringify(j).slice(0, 500));
+      return res.status(502).json({ error: 'Apify start failed', httpStatus: r.status, detail: j });
+    }
     res.set('Cache-Control', 'no-store');
     res.json({ runId: j.data.id, datasetId: j.data.defaultDatasetId });
   } catch (err) {
