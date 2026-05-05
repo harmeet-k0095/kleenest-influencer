@@ -1973,8 +1973,11 @@ async function runBatchUpdate() {
     }
     addLog(`Found ${rows.length} empty rows (${emptyData.totalEmpty} total). Starting Apify scrape…`);
 
-    // 2. Start Apify run
-    const urls     = rows.map(r => r.url);
+    // 2. Start Apify run — filter out bare domain URLs Apify can't process
+    const urls = rows.map(r => r.url).filter(u => {
+      const path = u.replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '').split('?')[0].trim();
+      return path.length >= 3;
+    });
     const startRes = await fetch('/api/metrics/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

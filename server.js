@@ -1185,6 +1185,9 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
       const row  = values[i];
       const link = String(row[idx.liveLink] || '').trim();
       if (!link.includes('instagram.com')) continue;
+      // Skip bare domain URLs with no reel/post path — Apify rejects them
+      const igPath = link.replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '').split('?')[0].trim();
+      if (!igPath || igPath.length < 3) continue;
       const views = row[idx.views];
       if (views && Number(views) > 0) continue;
 
