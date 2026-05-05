@@ -656,81 +656,106 @@ app.get('/api/debug/mohit', async (req, res) => {
 // ── /api/debug/orders-april — detailed April order counts per POC ─────────────
 app.get('/api/debug/orders-april', async (req, res) => {
   try {
-    const hmBase = `/users/${HARMEET_USER}/drive/items`;
-    const prBase = `/users/${PRIYANKA_USER}/drive/items/${LIVE_FILE_ID}/workbook/worksheets`;
+    const hmBase         = `/users/${HARMEET_USER}/drive/items`;
+    const priyankaTfcBase = `/users/${PRIYANKA_USER}/drive/items/${PRIYANKA_TFC_ID}/workbook/worksheets`;
     const safeGet = p => graphGet(p).catch(() => ({ values: [] }));
     const YM = '2026-04';
+    const ORDER_STATUSES = ['order place', 'order placed', 'live'];
 
     const [mohit, hardev, satyamMay, satyamApr, priyanka] = await Promise.all([
       safeGet(`${hmBase}/${MOHIT_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
       safeGet(`${hmBase}/${HARDEV_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
       safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('May%20master%20sheet')/usedRange`),
       safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange`),
-      safeGet(`${prBase}('Sheet1')/usedRange`),
+      safeGet(`${priyankaTfcBase}('Sheet1')/usedRange`),
     ]);
 
-    const ORDER_STATUSES = ['order place', 'order placed', 'live'];
-
-    function debugCount(values, label) {
-      if (!values || values.length < 2) return { label, error: 'no data', count: 0 };
-      const headers = values[0];
-      const rows = values.slice(1);
-      const statusIdx = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
+    function detailedCount(values, label) {
+      if (!values || values.length < 2) return { label, error: 'no data', rawCount: 0, dedupCount: 0 };
+      const headers     = values[0];
+      const rows        = values.slice(1);
+      const statusIdx   = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
       const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
-      const dateIdx = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
+      const productIdx  = headers.findIndex(h => /PRODUCT.?NAME/i.test(String(h)));
+      const dateIdx     = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
       const allStatuses = [...new Set(rows.map(r => String(r[statusIdx]||'').trim()).filter(Boolean))];
-      const matchedRows = rows.filter(r => {
-        if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return false;
+
+      // All rows in target month with valid status
+      const aprilRows = rows.filter(r => {
+        const user = String(r[usernameIdx] || '').trim();
+        if (!user || user === '#N/A') return false;
         if (!ORDER_STATUSES.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return false;
         if (dateIdx >= 0) return r[dateIdx] && isInTargetMonth(r[dateIdx], YM);
         return true;
       });
+
+      // Dedup by username only
+      const uniqueByUser = new Set(aprilRows.map(r => String(r[usernameIdx]).trim().toLowerCase()));
+
+      // Dedup by (username + product)
+      const seenUserProduct = new Set();
+      aprilRows.forEach(r => {
+        const user = String(r[usernameIdx] || '').trim().toLowerCase();
+        const product = productIdx >= 0 ? String(r[productIdx] || '').trim().toLowerCase() : '';
+        seenUserProduct.add(`${user}||${product}`);
+      });
+
+      // Per-user breakdown: show users with multiple rows + their products
+      const userProductMap = {};
+      aprilRows.forEach(r => {
+        const user    = String(r[usernameIdx] || '').trim().toLowerCase();
+        const product = productIdx >= 0 ? String(r[productIdx] || '').trim() : 'N/A';
+        const status  = String(r[statusIdx] || '').trim();
+        if (!userProductMap[user]) userProductMap[user] = [];
+        userProductMap[user].push({ product, status });
+      });
+      const multiRowUsers = Object.entries(userProductMap)
+        .filter(([, entries]) => entries.length > 1)
+        .slice(0, 15)
+        .map(([user, entries]) => ({ user, entries }));
+
       return {
-        label, count: matchedRows.length,
+        label,
         totalRows: rows.length,
-        headers: headers.slice(0,15),
-        statusColIdx: statusIdx, dateColIdx: dateIdx,
+        rawCount: aprilRows.length,            // all matching rows (no dedup)
+        dedupByUser: uniqueByUser.size,        // unique usernames
+        dedupByUserProduct: seenUserProduct.size, // unique (username+product) — what dashboard uses
+        headers: headers.slice(0, 15),
+        statusColIdx: statusIdx, productColIdx: productIdx, dateColIdx: dateIdx,
         uniqueStatuses: allStatuses.slice(0, 20),
-        sampleMatchedRows: matchedRows.slice(0,3).map(r => ({ username: r[usernameIdx], status: r[statusIdx], date: r[dateIdx] })),
+        multiRowUsers,  // users appearing more than once — shows their products/statuses
       };
     }
 
-    // Extended: unique user count + duplication check
-    function detailedCount(values, label) {
-      const base = debugCount(values, label);
-      if (!values || values.length < 2) return base;
-      const headers = values[0];
-      const rows = values.slice(1);
-      const statusIdx = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
-      const usernameIdx = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
-      const dateIdx = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
-      const ORDER_STATUSES = ['order place', 'order placed', 'live'];
-      // Rows in April with any valid status
-      const aprilRows = rows.filter(r => {
-        if (!r[usernameIdx] || String(r[usernameIdx]).trim() === '#N/A') return false;
-        if (!ORDER_STATUSES.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return false;
-        if (dateIdx >= 0) return r[dateIdx] && isInTargetMonth(r[dateIdx], YM);
-        return true;
-      });
-      // Unique usernames
-      const uniqueUsers = new Set(aprilRows.map(r => String(r[usernameIdx]).trim().toLowerCase()));
-      // Users appearing more than once
-      const userCounts = {};
-      aprilRows.forEach(r => {
-        const u = String(r[usernameIdx]).trim().toLowerCase();
-        userCounts[u] = (userCounts[u] || 0) + 1;
-      });
-      const duplicates = Object.entries(userCounts).filter(([,c]) => c > 1).slice(0, 10);
-      return { ...base, uniqueUsers: uniqueUsers.size, duplicateExamples: duplicates };
-    }
-
     res.json({
-      mohit:     detailedCount(mohit.values, 'Mohit'),
-      hardev:    detailedCount(hardev.values, 'Hardev'),
+      mohit:     detailedCount(mohit.values,     'Mohit'),
+      hardev:    detailedCount(hardev.values,     'Hardev'),
       satyamMay: detailedCount(satyamMay.values, 'Satyam-MaySheet'),
       satyamApr: detailedCount(satyamApr.values, 'Satyam-AprilSheet'),
-      priyanka:  detailedCount(priyanka.values, 'Priyanka'),
+      priyanka:  detailedCount(priyanka.values,  'Priyanka'),
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── /api/debug/priyanka-months — inspect Priyanka TFC Closing Month values ────
+app.get('/api/debug/priyanka-months', async (req, res) => {
+  try {
+    const priyankaTfcBase = `/users/${PRIYANKA_USER}/drive/items/${PRIYANKA_TFC_ID}/workbook/worksheets`;
+    const raw = await graphGet(`${priyankaTfcBase}('Sheet1')/usedRange`).catch(() => ({ values: [] }));
+    const values = raw.values || [];
+    if (values.length < 2) return res.json({ error: 'no data' });
+    const headers = values[0];
+    const rows = values.slice(1);
+    const closingMonthIdx = headers.findIndex(h => /CLOSING.?MONTH/i.test(String(h)));
+    const usernameIdx     = headers.findIndex(h => /USER.?NAME|USERNAME/i.test(String(h)));
+    const statusIdx       = headers.findIndex(h => /ORDER STATUS|CREATOR STATUS/i.test(String(h)));
+    const uniqueMonths = [...new Set(rows.map(r => String(r[closingMonthIdx]||'').trim()).filter(Boolean))];
+    const sample = rows.slice(0, 10).map(r => ({
+      closingMonth: r[closingMonthIdx],
+      username: r[usernameIdx],
+      status: r[statusIdx],
+    }));
+    res.json({ closingMonthIdx, uniqueMonths, sample, totalRows: rows.length });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

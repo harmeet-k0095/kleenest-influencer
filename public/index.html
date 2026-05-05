@@ -714,10 +714,11 @@ function populateFilters() {
   const orProducts = [...new Set([...(RAW.influencers||[]).map(i => i.product).filter(Boolean), ...skuOrderProducts])].sort();
   const orBrands   = [...new Set((RAW.influencers||[]).map(i => i.brand).filter(Boolean))].sort();
 
-  // Order months — from inhouse rows (which have dates)
-  const orMonths = [...new Set(
-    (RAW.influencers||[]).map(i => i.liveDate).filter(Boolean).map(d => d.slice(0, 7))
-  )].sort().reverse();
+  // Order months — union of (a) months from monthlyTargets (April, May targets)
+  // and (b) live-date months from inhouse rows, so the filter always shows both months
+  const orMonthsFromTargets = Object.keys(RAW.monthlyTargets || {});
+  const orMonthsFromRows    = (RAW.influencers||[]).map(i => i.liveDate).filter(Boolean).map(d => d.slice(0, 7));
+  const orMonths = [...new Set([...orMonthsFromTargets, ...orMonthsFromRows])].sort().reverse();
 
   fill('or-product', orProducts);
   fill('or-brand',   orBrands);
@@ -1239,15 +1240,23 @@ function renderPOCCards() {
   const POC_ORDER    = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
   const selSku      = (document.getElementById('or-product') || {}).value || '';
 
-  // Always count from OR_FILTERED when a filter is active; otherwise use pre-aggregated server counts.
-  // For POCs whose individual orders aren't in influencers (e.g. Priyanka's T&FC),
-  // fall back to pocSkuOrders when a product filter is set.
+  // Determine if only the month filter is active (no product/brand/POC filters).
+  // When true, use the pre-computed order-sheet counts (pocOrders) rather than
+  // live-sheet row counts — the live sheet and order sheets are different files
+  // and counting live rows when a month is set gives wrong numbers.
+  const fP2 = (document.getElementById('or-product') || {}).value || '';
+  const fB2 = (document.getElementById('or-brand')   || {}).value || '';
+  const fC2 = (document.getElementById('or-poc')     || {}).value || '';
+  const onlyMonthFilter = fM && !fP2 && !fB2 && !fC2;
+
   const filteredPocCounts = {};
   OR_FILTERED.forEach(i => { filteredPocCounts[i.poc] = (filteredPocCounts[i.poc]||0)+1; });
 
   document.getElementById('or-poc-cards').innerHTML = POC_ORDER.map(name => {
     let orders;
-    if (!filtered) {
+    if (!filtered || onlyMonthFilter) {
+      // No filter OR only month selected → use pre-aggregated order-sheet counts
+      // (pocOrders is already month-aware: uses monthT.pocOrders when fM is set)
       orders = pocOrders[name] || 0;
     } else if (selSku) {
       // Product filter active: use pocSkuOrders for accurate per-SKU counts per POC
@@ -1278,7 +1287,9 @@ function renderPOCCards() {
 }
 
 function renderSKUGrid() {
-  const pocSkuOrders = RAW.pocSkuOrders || {};
+  const fM_sku      = (document.getElementById('or-month') || {}).value || '';
+  const monthT_sku  = (RAW.monthlyTargets || {})[fM_sku] || {};
+  const pocSkuOrders = monthT_sku.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
   const POCS         = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
