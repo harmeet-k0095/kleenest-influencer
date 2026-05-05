@@ -1206,31 +1206,40 @@ function monthLabelStr(ym) {
 
 function renderOrderTargets() {
   const fM        = document.getElementById('or-month').value;
+  const fP_ot     = (document.getElementById('or-product') || {}).value || '';
   const overall   = RAW.overallTargets || {};
   // Use month-specific data if available; else fall back to server defaults
-  const monthT    = (RAW.monthlyTargets || {})[fM] || {};
-  const pocOrders = monthT.pocOrders || RAW.pocOrders || {};
+  const monthT      = (RAW.monthlyTargets || {})[fM] || {};
+  const pocOrders   = monthT.pocOrders    || RAW.pocOrders    || {};
+  const pocSkuOrd   = monthT.pocSkuOrders || RAW.pocSkuOrders || {};
 
   const orderTarget   = monthT.overallOrderTarget  || overall.orderTarget  || 1020;
   const teamTargets   = monthT.teamTargets || RAW.teamTargets || {};
   const agencyTarget  = teamTargets['Priyanka'] || 0;
   const inhouseTarget = (teamTargets['Mohit']||0) + (teamTargets['Hardev']||0) + (teamTargets['Satyam']||0);
 
-  const agencyActual  = pocOrders['Priyanka'] || 0;
-  const inhouseActual = (pocOrders['Mohit']||0) + (pocOrders['Hardev']||0) + (pocOrders['Satyam']||0);
+  // When a SKU filter is active, use SKU-specific counts from order sheets
+  // so all numbers (KPI, POC cards, targets) are consistent
+  const _cnt = (name) => fP_ot
+    ? ((pocSkuOrd[name] || {})[fP_ot] || 0)
+    : (pocOrders[name] || 0);
+
+  const agencyActual  = _cnt('Priyanka');
+  const inhouseActual = _cnt('Mohit') + _cnt('Hardev') + _cnt('Satyam');
   const totalActual   = agencyActual + inhouseActual;
 
   const totalPct   = orderTarget   > 0 ? Math.min(Math.round(totalActual  /orderTarget  *100),100) : 0;
   const agencyPct  = agencyTarget  > 0 ? Math.min(Math.round(agencyActual /agencyTarget *100),100) : 0;
   const inhousePct = inhouseTarget > 0 ? Math.min(Math.round(inhouseActual/inhouseTarget*100),100) : 0;
 
-  const label = monthLabelStr(fM || RAW.targetMonth || '');
+  const label   = monthLabelStr(fM || RAW.targetMonth || '');
+  const skuLabel = fP_ot ? ` · ${fP_ot}` : '';
 
   const orTargetEl = document.getElementById('or-overall-targets');
   if (!orTargetEl) return;
   orTargetEl.innerHTML = `
     <div class="ot-card blue-card">
-      <div class="ot-label" style="color:#2563eb">🛒 Overall Order Target${label ? ' — ' + label : ''}</div>
+      <div class="ot-label" style="color:#2563eb">🛒 Overall Order Target${label ? ' — ' + label : ''}${skuLabel}</div>
       <div class="ot-nums">${totalActual.toLocaleString('en-IN')} <span>/ ${orderTarget.toLocaleString('en-IN')} target</span></div>
       <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
       <div class="ot-pct" style="color:#3b82f6">${totalPct}% achieved</div>
