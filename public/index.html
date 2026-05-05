@@ -1259,8 +1259,11 @@ function renderPOCCards() {
       // (pocOrders is already month-aware: uses monthT.pocOrders when fM is set)
       orders = pocOrders[name] || 0;
     } else if (selSku) {
-      // Product filter active: use pocSkuOrders for accurate per-SKU counts per POC
-      orders = (pocSkuOrders[name] || {})[selSku] || filteredPocCounts[name] || 0;
+      // SKU filter active: use only pocSkuOrders — never fall back to live-sheet counts.
+      // Priyanka's orders are tracked in a separate TFC sheet and must not bleed
+      // into SKUs she hasn't worked on just because the fallback finds her rows
+      // in the main live sheet under a different product.
+      orders = (pocSkuOrders[name] || {})[selSku] || 0;
     } else {
       orders = filteredPocCounts[name] || 0;
     }
