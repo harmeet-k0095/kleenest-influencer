@@ -1980,8 +1980,9 @@ async function runBatchUpdate() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls }),
     });
-    const { runId } = await startRes.json();
-    if (!runId) throw new Error('Apify failed to start');
+    const startData = await startRes.json();
+    if (!startData.runId) throw new Error(`Apify failed to start: ${startData.error || startData.detail?.error || JSON.stringify(startData)}`);
+    const runId = startData.runId;
     addLog(`Apify run started (ID: ${runId}). Polling…`);
 
     // 3. Poll until done
