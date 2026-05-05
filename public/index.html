@@ -838,8 +838,18 @@ function applyOrderFilters() {
     return true;
   });
 
+  const fP_tab  = document.getElementById('or-product').value;
+  const fM_tab  = document.getElementById('or-month').value;
   const pocTotal = Object.values(RAW.pocOrders || {}).reduce((s, v) => s + v, 0);
-  document.getElementById('tab-orders-count').textContent = isOrderFiltered() ? OR_FILTERED.length : (pocTotal || OR_FILTERED.length);
+  // When a SKU filter is active use order-sheet counts (same source as SKU chart)
+  const skuTotal = (() => {
+    if (!fP_tab) return null;
+    const mt = (RAW.monthlyTargets || {})[fM_tab] || {};
+    const pso = mt.pocSkuOrders || RAW.pocSkuOrders || {};
+    return Object.values(pso).reduce((s, m) => s + (m[fP_tab] || 0), 0);
+  })();
+  const tabCount = isOrderFiltered() ? (skuTotal !== null ? skuTotal : OR_FILTERED.length) : (pocTotal || OR_FILTERED.length);
+  document.getElementById('tab-orders-count').textContent = tabCount;
   renderOrderKPIs();
   renderOrderTargets();
   renderPOCCards();
@@ -1168,7 +1178,19 @@ function renderLiveTargets() {
 // ════════════════════════════════════════════════════════════
 function renderOrderKPIs() {
   const filtered = isOrderFiltered();
-  const orders   = filtered ? OR_FILTERED.length : (RAW.kpis.totalOrders || OR_FILTERED.length);
+  const fP_kpi   = (document.getElementById('or-product') || {}).value || '';
+  const fM_kpi   = (document.getElementById('or-month')   || {}).value || '';
+  let orders;
+  if (!filtered) {
+    orders = RAW.kpis.totalOrders || OR_FILTERED.length;
+  } else if (fP_kpi) {
+    // SKU filter active → sum from order sheets so it matches the SKU chart
+    const mt_kpi  = (RAW.monthlyTargets || {})[fM_kpi] || {};
+    const pso_kpi = mt_kpi.pocSkuOrders || RAW.pocSkuOrders || {};
+    orders = Object.values(pso_kpi).reduce((s, m) => s + (m[fP_kpi] || 0), 0);
+  } else {
+    orders = OR_FILTERED.length;
+  }
   document.getElementById('or-kpi-orders').textContent     = orders.toLocaleString('en-IN');
   document.getElementById('or-kpi-orders-sub').textContent = filtered ? 'Filtered view' : 'Across all team members';
 }
