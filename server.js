@@ -1147,11 +1147,12 @@ function colLetter(index) {
 
 // ── GET /api/metrics/empty-rows — rows with Instagram links but no VIEWS ───────
 // Scans: Live Inhouse (in-house), TTC + INK REVENUE (agency)
-// Query: ?limit=N (default 50, max 200)  ?type=inhouse|agency (default: both)
+// Query: ?limit=N (default 50, max 200)  ?type=inhouse|agency (default: both)  ?month=YYYY-MM
 // Returns: { rows: [{excelRow, username, url, viewsCol, likesCol, commentsCol, fileId, sheetName}], totalEmpty, inhouseEmpty, agencyEmpty }
 app.get('/api/metrics/empty-rows', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-  const type  = req.query.type || 'all'; // 'inhouse' | 'agency' | 'all'
+  const limit     = Math.min(parseInt(req.query.limit) || 50, 200);
+  const type      = req.query.type  || 'all';  // 'inhouse' | 'agency' | 'all'
+  const monthFilter = req.query.month || '';   // 'YYYY-MM' or '' for all
 
   // Scan one sheet and append qualifying rows to `out`; increment total.count
   async function scanSheet(fileId, sheetName, out, totalRef) {
@@ -1172,6 +1173,7 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
       views:    col('VIEWS'),
       likes:    col('LIKES'),
       comments: colInc('COMMENT'),
+      liveDate: colInc('LIVE DATE'),
     };
     if (idx.liveLink < 0) return; // sheet layout doesn't match — skip silently
 
@@ -1185,6 +1187,16 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
       if (!link.includes('instagram.com')) continue;
       const views = row[idx.views];
       if (views && Number(views) > 0) continue;
+
+      // Month filter — skip rows whose live date doesn't match selected month
+      if (monthFilter && idx.liveDate >= 0) {
+        const dateVal = row[idx.liveDate];
+        const d = excelSerialToDate(dateVal);
+        if (!d) continue; // no date — skip when month filter is active
+        const rowYM = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        if (rowYM !== monthFilter) continue;
+      }
+
       totalRef.count++;
       if (out.length < limit) {
         out.push({

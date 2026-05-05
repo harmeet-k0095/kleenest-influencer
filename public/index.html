@@ -357,6 +357,9 @@
           <option value="inhouse">🏠 In-house Sheet</option>
           <option value="agency">🏢 Agency Sheet</option>
         </select>
+        <select class="batch-select" id="batch-month" onchange="loadEmptyRowCount()">
+          <option value="">All Months</option>
+        </select>
         <select class="batch-select" id="batch-limit">
           <option value="25">25 rows</option>
           <option value="50" selected>50 rows</option>
@@ -720,6 +723,9 @@ function populateFilters() {
   fill('or-brand',   orBrands);
   fill('or-poc',     pocs);
   fillMonths('or-month', orMonths);
+
+  // Populate batch month dropdown with same months as live tab
+  fillMonths('batch-month', months);
 }
 
 function fill(id, opts) {
@@ -1914,7 +1920,9 @@ function renderTierDetail(tierId) {
 async function loadEmptyRowCount() {
   try {
     const sheetType = (document.getElementById('batch-sheet-type') || {}).value || 'inhouse';
-    const res  = await fetch(`/api/metrics/empty-rows?limit=1&type=${sheetType}`);
+    const month     = (document.getElementById('batch-month') || {}).value || '';
+    const params    = new URLSearchParams({ limit: 1, type: sheetType, ...(month ? { month } : {}) });
+    const res  = await fetch(`/api/metrics/empty-rows?${params}`);
     const data = await res.json();
     const el   = document.getElementById('batch-empty-count');
     if (el && data.totalEmpty != null) {
@@ -1931,6 +1939,7 @@ async function runBatchUpdate() {
   const btn       = document.getElementById('batch-run-btn');
   const limit     = parseInt(document.getElementById('batch-limit').value) || 50;
   const sheetType = document.getElementById('batch-sheet-type').value; // 'inhouse' | 'agency'
+  const month     = document.getElementById('batch-month').value;       // 'YYYY-MM' or ''
   const status    = document.getElementById('batch-status');
   const log       = document.getElementById('batch-log');
 
@@ -1948,10 +1957,12 @@ async function runBatchUpdate() {
   }
 
   try {
-    // 1. Fetch empty rows for the selected sheet type
+    // 1. Fetch empty rows for the selected sheet type + month
     const sheetLabel = sheetType === 'agency' ? 'Agency (TTC + Ink Revenue)' : 'In-house';
-    addLog(`Fetching up to ${limit} empty rows from ${sheetLabel} sheet…`);
-    const emptyRes  = await fetch(`/api/metrics/empty-rows?limit=${limit}&type=${sheetType}`);
+    const monthLabel = month ? ` — ${monthLabelStr(month)}` : '';
+    addLog(`Fetching up to ${limit} empty rows from ${sheetLabel} sheet${monthLabel}…`);
+    const params    = new URLSearchParams({ limit, type: sheetType, ...(month ? { month } : {}) });
+    const emptyRes  = await fetch(`/api/metrics/empty-rows?${params}`);
     const emptyData = await emptyRes.json();
     const rows      = emptyData.rows || [];
 
