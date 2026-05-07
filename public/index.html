@@ -840,15 +840,29 @@ function applyOrderFilters() {
 
   const fP_tab  = document.getElementById('or-product').value;
   const fM_tab  = document.getElementById('or-month').value;
+  const fB_tab  = document.getElementById('or-brand').value;
+  const fC_tab  = document.getElementById('or-poc').value;
   const pocTotal = Object.values(RAW.pocOrders || {}).reduce((s, v) => s + v, 0);
-  // When a SKU filter is active use order-sheet counts (same source as SKU chart)
-  const skuTotal = (() => {
-    if (!fP_tab) return null;
-    const mt = (RAW.monthlyTargets || {})[fM_tab] || {};
-    const pso = mt.pocSkuOrders || RAW.pocSkuOrders || {};
-    return Object.values(pso).reduce((s, m) => s + (m[fP_tab] || 0), 0);
+
+  // Helper: total orders for selected month from order sheets (same source as targets card)
+  const monthTotal = (ym) => {
+    const mt = (RAW.monthlyTargets || {})[ym] || {};
+    const po = mt.pocOrders || RAW.pocOrders || {};
+    return Object.values(po).reduce((s, v) => s + v, 0);
+  };
+
+  // Determine tab badge: use order-sheet counts (not live-sheet OR_FILTERED) unless
+  // a non-month filter is active that requires counting from the live sheet.
+  const tabCount = (() => {
+    if (!isOrderFiltered())             return pocTotal || OR_FILTERED.length; // no filter
+    if (fP_tab) {                       // SKU filter → pocSkuOrders
+      const mt  = (RAW.monthlyTargets || {})[fM_tab] || {};
+      const pso = mt.pocSkuOrders || RAW.pocSkuOrders || {};
+      return Object.values(pso).reduce((s, m) => s + (m[fP_tab] || 0), 0);
+    }
+    if (fM_tab && !fB_tab && !fC_tab)  return monthTotal(fM_tab); // only month → pocOrders
+    return OR_FILTERED.length;          // brand/POC filter → live-sheet filtered count
   })();
-  const tabCount = isOrderFiltered() ? (skuTotal !== null ? skuTotal : OR_FILTERED.length) : (pocTotal || OR_FILTERED.length);
   document.getElementById('tab-orders-count').textContent = tabCount;
   renderOrderKPIs();
   renderOrderTargets();
@@ -1180,15 +1194,25 @@ function renderOrderKPIs() {
   const filtered = isOrderFiltered();
   const fP_kpi   = (document.getElementById('or-product') || {}).value || '';
   const fM_kpi   = (document.getElementById('or-month')   || {}).value || '';
+  const fB_kpi   = (document.getElementById('or-brand')   || {}).value || '';
+  const fC_kpi   = (document.getElementById('or-poc')     || {}).value || '';
+
   let orders;
   if (!filtered) {
+    // No filter → use server-side total orders KPI
     orders = RAW.kpis.totalOrders || OR_FILTERED.length;
   } else if (fP_kpi) {
-    // SKU filter active → sum from order sheets so it matches the SKU chart
+    // SKU filter active → sum pocSkuOrders (matches SKU chart)
     const mt_kpi  = (RAW.monthlyTargets || {})[fM_kpi] || {};
     const pso_kpi = mt_kpi.pocSkuOrders || RAW.pocSkuOrders || {};
     orders = Object.values(pso_kpi).reduce((s, m) => s + (m[fP_kpi] || 0), 0);
+  } else if (fM_kpi && !fB_kpi && !fC_kpi) {
+    // Only month filter → use pocOrders total from order sheets (matches targets card)
+    const mt_kpi = (RAW.monthlyTargets || {})[fM_kpi] || {};
+    const po_kpi = mt_kpi.pocOrders || RAW.pocOrders || {};
+    orders = Object.values(po_kpi).reduce((s, v) => s + v, 0);
   } else {
+    // Brand / POC filter → count from live-sheet filtered rows
     orders = OR_FILTERED.length;
   }
   document.getElementById('or-kpi-orders').textContent     = orders.toLocaleString('en-IN');
