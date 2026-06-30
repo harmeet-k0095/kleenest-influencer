@@ -1991,7 +1991,7 @@ async function runBatchUpdate() {
     const startRes = await fetch('/api/metrics/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls }),
+      body: JSON.stringify({ usernames }),
     });
     const startData = await startRes.json();
     if (!startData.runId) throw new Error(`Apify failed to start: ${startData.error || startData.detail?.error || JSON.stringify(startData)}`);
