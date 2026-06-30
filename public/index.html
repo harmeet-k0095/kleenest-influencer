@@ -1528,14 +1528,15 @@ async function fetchAndUpdateMetrics() {
   const progress = document.getElementById('metrics-progress');
   const progText = document.getElementById('metrics-progress-text');
 
-  // All unique live links (strip query params before sending to Apify)
-  const uniqueUrls = [...new Set(
+  // Unique creator usernames — the scraper only returns view counts when
+  // scraping a creator's profile feed, not when scraping direct reel URLs.
+  const uniqueUsernames = [...new Set(
     [...(RAW.influencers||[]), ...(RAW.agencyInfluencers||[])]
-      .filter(i => i.liveLink && String(i.liveLink).startsWith('http'))
-      .map(i => i.liveLink.split('?')[0])
+      .filter(i => i.liveLink && String(i.liveLink).startsWith('http') && i.username)
+      .map(i => i.username)
   )];
 
-  if (!uniqueUrls.length) return;
+  if (!uniqueUsernames.length) return;
 
   btn.disabled    = true;
   btn.textContent = '⏳ Fetching…';
@@ -1544,18 +1545,18 @@ async function fetchAndUpdateMetrics() {
   const BATCH = 50;
   let done = 0;
 
-  for (let i = 0; i < uniqueUrls.length; i += BATCH) {
-    const batch    = uniqueUrls.slice(i, i + BATCH);
+  for (let i = 0; i < uniqueUsernames.length; i += BATCH) {
+    const batch    = uniqueUsernames.slice(i, i + BATCH);
     const batchNum = Math.floor(i / BATCH) + 1;
-    const batchEnd = Math.min(i + BATCH, uniqueUrls.length);
-    progText.textContent = `Starting batch ${batchNum}… (${batchEnd}/${uniqueUrls.length} posts)`;
+    const batchEnd = Math.min(i + BATCH, uniqueUsernames.length);
+    progText.textContent = `Starting batch ${batchNum}… (${batchEnd}/${uniqueUsernames.length} creators)`;
 
     try {
       // 1️⃣ Start Apify run — returns instantly with runId
       const startRes = await fetch('/api/metrics/start', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ urls: batch }),
+        body:    JSON.stringify({ usernames: batch }),
       });
       const { runId } = await startRes.json();
       if (!runId) throw new Error('No runId returned');
@@ -1565,7 +1566,7 @@ async function fetchAndUpdateMetrics() {
       for (let attempt = 0; attempt < 60; attempt++) {
         await new Promise(r => setTimeout(r, 5000));
         const elapsed = (attempt + 1) * 5;
-        progText.textContent = `Batch ${batchNum} running… ${elapsed}s elapsed (${batchEnd}/${uniqueUrls.length} posts)`;
+        progText.textContent = `Batch ${batchNum} running… ${elapsed}s elapsed (${batchEnd}/${uniqueUsernames.length} creators)`;
 
         const poll = await fetch(`/api/metrics/result/${runId}`, { cache: 'no-store' });
         const data = await poll.json();
@@ -1984,11 +1985,9 @@ async function runBatchUpdate() {
     }
     addLog(`Found ${rows.length} empty rows (${emptyData.totalEmpty} total). Starting Apify scrape…`);
 
-    // 2. Start Apify run — filter out bare domain URLs Apify can't process
-    const urls = rows.map(r => r.url).filter(u => {
-      const path = u.replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '').split('?')[0].trim();
-      return path.length >= 3;
-    });
+    // 2. Start Apify run — scrape by creator profile (not direct reel URLs),
+    // since the scraper only returns view counts from a profile's posts feed.
+    const usernames = rows.map(r => r.username).filter(Boolean);
     const startRes = await fetch('/api/metrics/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -1383,14 +1383,26 @@ app.post('/api/metrics/write-sheet', async (req, res) => {
 });
 
 // ── POST /api/metrics/start — kick off an Apify run (returns instantly) ───────
-// Body: { urls: [...] }
+// Body: { usernames: [...] }
 // Returns: { runId, datasetId }
+//
+// IMPORTANT: apify/instagram-scraper never returns videoViewCount when scraping
+// individual reel/post URLs via directUrls — that field is only populated when
+// scraping a creator's profile (their recent posts feed). So instead of passing
+// reel URLs directly, we scrape each unique creator's profile and match the
+// returned posts back to our rows by shortcode (done client-side, same as before).
 app.post('/api/metrics/start', async (req, res) => {
-  const { urls } = req.body || {};
-  if (!Array.isArray(urls) || urls.length === 0) return res.json({ runId: null });
+  const { usernames } = req.body || {};
+  if (!Array.isArray(usernames) || usernames.length === 0) return res.json({ runId: null });
 
   const token = process.env.APIFY_TOKEN;
   if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
+
+  const uniqueUsernames = [...new Set(usernames.map(u => String(u).trim()).filter(Boolean))];
+  const profileUrls = uniqueUsernames.map(u => `https://www.instagram.com/${u}/`);
+  // Per-profile post limit — bounds cost ($0.0023/result) while covering each
+  // creator's recent reels. Raise if older posts are frequently missed.
+  const RESULTS_LIMIT_PER_PROFILE = 25;
 
   try {
     const r = await fetch(
@@ -1399,9 +1411,9 @@ app.post('/api/metrics/start', async (req, res) => {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          directUrls:   urls,
-          resultsType:  'reels',
-          resultsLimit: urls.length,
+          directUrls:   profileUrls,
+          resultsType:  'posts',
+          resultsLimit: RESULTS_LIMIT_PER_PROFILE,
         }),
       }
     );
