@@ -1398,16 +1398,17 @@ app.post('/api/metrics/start', async (req, res) => {
   const token = process.env.APIFY_TOKEN;
   if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
-  // Count occurrences (rows needing metrics) per creator — most creators only
-  // need 1-2 of their recent posts, so we don't need to crawl deep into every
-  // profile's feed. Limit = max rows needed for any single creator + buffer,
-  // bounded so a single big-batch run doesn't crawl excessively deep per profile.
-  const counts = {};
-  usernames.forEach(u => { const k = String(u).trim(); if (k) counts[k] = (counts[k] || 0) + 1; });
-  const uniqueUsernames = Object.keys(counts);
+  // Sheet usernames sometimes have a trailing slash or stray path segments
+  // (e.g. "varshamohit/") — strip those so the built profile URL is clean.
+  const cleanUsername = u => String(u).trim().replace(/^\/+|\/+$/g, '').split('/')[0];
+  const uniqueUsernames = [...new Set(usernames.map(cleanUsername).filter(Boolean))];
   const profileUrls = uniqueUsernames.map(u => `https://www.instagram.com/${u}/`);
-  const maxNeeded = Math.max(1, ...Object.values(counts));
-  const RESULTS_LIMIT_PER_PROFILE = Math.min(maxNeeded + 3, 12);
+  // Backlog rows can be many posts deep in a prolific creator's feed (a row
+  // from months ago may now be 30-40 posts back). A small limit tuned to "rows
+  // needed" misses these almost entirely, so scrape reasonably deep per
+  // profile instead — costs more per run ($0.0023/result) but actually finds
+  // the target posts.
+  const RESULTS_LIMIT_PER_PROFILE = 50;
 
   try {
     const r = await fetch(
@@ -1472,7 +1473,6 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
   }
 });
 
-// ── Start server locally; export for Vercel serverless ───────────────────────
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => console.log(`Kleenest Dashboard running on http://localhost:${PORT}`));
