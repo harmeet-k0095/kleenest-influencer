@@ -1400,7 +1400,7 @@ app.post('/api/metrics/start', async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           directUrls:   urls,
-          resultsType:  'posts',
+          resultsType:  'reels',
           resultsLimit: urls.length,
         }),
       }
