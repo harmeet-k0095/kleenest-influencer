@@ -1398,11 +1398,16 @@ app.post('/api/metrics/start', async (req, res) => {
   const token = process.env.APIFY_TOKEN;
   if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
-  const uniqueUsernames = [...new Set(usernames.map(u => String(u).trim()).filter(Boolean))];
+  // Count occurrences (rows needing metrics) per creator — most creators only
+  // need 1-2 of their recent posts, so we don't need to crawl deep into every
+  // profile's feed. Limit = max rows needed for any single creator + buffer,
+  // bounded so a single big-batch run doesn't crawl excessively deep per profile.
+  const counts = {};
+  usernames.forEach(u => { const k = String(u).trim(); if (k) counts[k] = (counts[k] || 0) + 1; });
+  const uniqueUsernames = Object.keys(counts);
   const profileUrls = uniqueUsernames.map(u => `https://www.instagram.com/${u}/`);
-  // Per-profile post limit — bounds cost ($0.0023/result) while covering each
-  // creator's recent reels. Raise if older posts are frequently missed.
-  const RESULTS_LIMIT_PER_PROFILE = 25;
+  const maxNeeded = Math.max(1, ...Object.values(counts));
+  const RESULTS_LIMIT_PER_PROFILE = Math.min(maxNeeded + 3, 12);
 
   try {
     const r = await fetch(
