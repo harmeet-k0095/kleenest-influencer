@@ -1998,9 +1998,11 @@ async function runBatchUpdate() {
     const runId = startData.runId;
     addLog(`Apify run started (ID: ${runId}). Polling…`);
 
-    // 3. Poll until done
+    // 3. Poll until done — profile-level scraping of ~50 creators can take
+    // 10-15+ minutes on Apify's side, so give it a generous window (25 min)
+    // instead of giving up early and silently skipping the sheet write.
     let items = null;
-    for (let attempt = 0; attempt < 60; attempt++) {
+    for (let attempt = 0; attempt < 250; attempt++) {
       await new Promise(r => setTimeout(r, 6000));
       const poll = await fetch(`/api/metrics/result/${runId}`, { cache: 'no-store' });
       const data  = await poll.json();
