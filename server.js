@@ -1509,7 +1509,12 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
     const status = run?.data?.status;
 
     res.set('Cache-Control', 'no-store');
-    if (status !== 'SUCCEEDED') return res.json({ status: status || 'UNKNOWN' });
+    if (status !== 'SUCCEEDED') {
+      return res.json({
+        status: status || 'UNKNOWN',
+        statusMessage: run?.data?.statusMessage || null,
+      });
+    }
 
     // Run finished — fetch dataset items. Each Apify item includes heavy
     // nested data (full comment threads, every image variant URL, etc.) that

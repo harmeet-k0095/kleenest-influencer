@@ -2008,7 +2008,7 @@ async function runBatchUpdate() {
       const data  = await poll.json();
       addLog(`  Status: ${data.status} (${(attempt + 1) * 6}s)`);
       if (data.status === 'SUCCEEDED') { items = data.items; break; }
-      if (data.status === 'FAILED' || data.status === 'ABORTED') throw new Error(`Apify run ${data.status}`);
+      if (data.status === 'FAILED' || data.status === 'ABORTED') throw new Error(`Apify run ${data.status}${data.statusMessage ? ': ' + data.statusMessage : ''}`);
     }
     if (!items) throw new Error('Apify timed out');
     addLog(`✅ Scraped ${items.length} posts. Writing to sheet…`);
