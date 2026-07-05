@@ -1246,20 +1246,54 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // ── Graph PATCH helper (write to Excel) ──────────────────────────────────────
-async function graphPatch(path, body) {
+async function graphPatch(path, body, sessionId) {
   const token = await getToken();
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  if (sessionId) headers['workbook-session-id'] = sessionId;
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   });
   return res.json();
+}
+
+// ── Workbook session helpers ─────────────────────────────────────────────────
+// Every PATCH without a session implicitly opens + locks + closes the whole
+// workbook, which is what made each single-cell write take ~3s (measured:
+// 15 rows × 3 cells = 45 sequential PATCHes took 150s). A persisted session
+// keeps the workbook open across calls, cutting per-call latency drastically.
+async function createSession(fileId, user = PRIYANKA_USER) {
+  const token = await getToken();
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${user}/drive/items/${fileId}/workbook/createSession`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persistChanges: true }),
+    }
+  );
+  const data = await res.json();
+  return data.id || null;
+}
+async function closeSession(fileId, sessionId, user = PRIYANKA_USER) {
+  if (!sessionId) return;
+  const token = await getToken();
+  await fetch(
+    `https://graph.microsoft.com/v1.0/users/${user}/drive/items/${fileId}/workbook/closeSession`,
+    { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'workbook-session-id': sessionId } }
+  ).catch(() => {});
 }
 
 function colLetter(index) {
   let col = '', n = index + 1;
   while (n > 0) { const rem = (n - 1) % 26; col = String.fromCharCode(65 + rem) + col; n = Math.floor((n - 1) / 26); }
   return col;
+}
+function colIndex(letters) {
+  let n = 0;
+  for (const ch of String(letters).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
 }
 
 // ── GET /api/metrics/empty-rows — rows with Instagram links but no VIEWS ───────
@@ -1359,26 +1393,55 @@ app.post('/api/metrics/write-sheet', async (req, res) => {
   const { updates } = req.body || {};
   if (!Array.isArray(updates) || !updates.length) return res.json({ written: 0 });
 
+  // Views/likes/comments columns are always contiguous (Q:S on the in-house
+  // sheet, M:O on the agency sheets), so all 3 can be written with a single
+  // PATCH per row instead of 3 — a 3x cut in round trips on top of the
+  // session speedup below.
+  // Group by fileId so we open one workbook session per file and reuse it
+  // across every row in that file, instead of one implicit session per PATCH.
+  const byFile = {};
+  updates.forEach(u => {
+    const fileId = u.fileId || LIVE_FILE_ID;
+    (byFile[fileId] = byFile[fileId] || []).push(u);
+  });
+
   let written = 0;
   const errors = [];
-  for (const u of updates) {
-    const {
-      excelRow, views, likes, comments,
-      viewsCol, likesCol, commentsCol,
-      fileId    = LIVE_FILE_ID,
-      sheetName = 'Live Inhouse',
-    } = u;
-    const enc  = encodeURIComponent(sheetName);
-    const base = `/users/${PRIYANKA_USER}/drive/items/${fileId}/workbook/worksheets`;
-    try {
-      await graphPatch(`${base}('${enc}')/range(address='${viewsCol}${excelRow}')`,    { values: [[views]]    });
-      await graphPatch(`${base}('${enc}')/range(address='${likesCol}${excelRow}')`,    { values: [[likes]]    });
-      await graphPatch(`${base}('${enc}')/range(address='${commentsCol}${excelRow}')`, { values: [[comments]] });
-      written++;
-    } catch (err) {
-      errors.push({ excelRow, sheetName, error: err.message });
+
+  for (const [fileId, group] of Object.entries(byFile)) {
+    const sessionId = await createSession(fileId).catch(() => null);
+
+    for (const u of group) {
+      const {
+        excelRow, views, likes, comments,
+        viewsCol, likesCol, commentsCol,
+        sheetName = 'Live Inhouse',
+      } = u;
+      const enc  = encodeURIComponent(sheetName);
+      const base = `/users/${PRIYANKA_USER}/drive/items/${fileId}/workbook/worksheets`;
+      const contiguous = colIndex(likesCol) === colIndex(viewsCol) + 1
+                       && colIndex(commentsCol) === colIndex(viewsCol) + 2;
+      try {
+        if (contiguous) {
+          await graphPatch(
+            `${base}('${enc}')/range(address='${viewsCol}${excelRow}:${commentsCol}${excelRow}')`,
+            { values: [[views, likes, comments]] },
+            sessionId
+          );
+        } else {
+          await graphPatch(`${base}('${enc}')/range(address='${viewsCol}${excelRow}')`,    { values: [[views]]    }, sessionId);
+          await graphPatch(`${base}('${enc}')/range(address='${likesCol}${excelRow}')`,    { values: [[likes]]    }, sessionId);
+          await graphPatch(`${base}('${enc}')/range(address='${commentsCol}${excelRow}')`, { values: [[comments]] }, sessionId);
+        }
+        written++;
+      } catch (err) {
+        errors.push({ excelRow, sheetName, error: err.message });
+      }
     }
+
+    await closeSession(fileId, sessionId);
   }
+
   res.json({ written, errors });
 });
 
