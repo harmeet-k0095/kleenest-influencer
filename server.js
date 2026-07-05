@@ -1472,6 +1472,14 @@ app.post('/api/metrics/start', async (req, res) => {
   // profile instead — costs more per run ($0.0023/result) but actually finds
   // the target posts.
   const RESULTS_LIMIT_PER_PROFILE = 50;
+  // apify~instagram-scraper is pay-per-event ($0.0023/result). Without an
+  // explicit maxTotalChargeUsd, Apify applies its own small default cap
+  // (~$0.91 observed) and the actor self-terminates as FAILED once crossed —
+  // silently killing any batch large enough to exceed it (28 profiles was
+  // already enough to trigger this). Scale the cap to the actual batch size
+  // with headroom so real runs are never cut off mid-scrape.
+  const PRICE_PER_RESULT = 0.0023;
+  const maxTotalChargeUsd = Math.max(2, uniqueUsernames.length * RESULTS_LIMIT_PER_PROFILE * PRICE_PER_RESULT * 1.5);
 
   try {
     const r = await fetch(
@@ -1483,6 +1491,7 @@ app.post('/api/metrics/start', async (req, res) => {
           directUrls:   profileUrls,
           resultsType:  'posts',
           resultsLimit: RESULTS_LIMIT_PER_PROFILE,
+          maxTotalChargeUsd,
         }),
       }
     );
@@ -1513,6 +1522,7 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
       return res.json({
         status: status || 'UNKNOWN',
         statusMessage: run?.data?.statusMessage || null,
+        ...(req.query.full ? { full: run.data } : {}),
       });
     }
 
