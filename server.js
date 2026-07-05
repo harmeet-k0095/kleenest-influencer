@@ -1448,10 +1448,16 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (status !== 'SUCCEEDED') return res.json({ status: status || 'UNKNOWN' });
 
-    // Run finished — fetch dataset items
+    // Run finished — fetch dataset items. Each Apify item includes heavy
+    // nested data (full comment threads, every image variant URL, etc.) that
+    // we never use — for large batches this payload can run into multiple MB
+    // and blow past the serverless function's time/size limits, causing the
+    // client's poll request to fail outright. Apify's `fields` param trims
+    // the response server-side to just what we need.
+    const FIELDS = 'url,inputUrl,shortCode,videoViewCount,videoPlayCount,likesCount,commentsCount';
     const datasetId = run.data.defaultDatasetId;
     const itemsRes  = await fetch(
-      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&clean=true`
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&clean=true&fields=${FIELDS}`
     );
     const items = await itemsRes.json();
 
