@@ -862,17 +862,17 @@ app.get('/api/dashboard', async (req, res) => {
     const safeGet = path => graphGet(path).catch(() => ({ values: [] }));
 
     // TTC and INK REVENUE are large sheets that intermittently hit Graph
-    // API's own MaxRequestDurationExceeded timeout on Microsoft's side
-    // (observed directly: sometimes both attempts fail in the same request).
-    // One retry helps but isn't fully reliable, so on top of that we fall
-    // back to the last successful fetch (cached at module scope, so it
-    // survives across requests on a warm serverless instance) instead of
-    // going all the way to empty/zero.
-    const safeGetWithRetry = async (path) => {
-      const first = await graphGet(path).catch(e => ({ error: { message: e.message } }));
-      let result = first;
-      if (first.error) {
-        result = await graphGet(path).catch(() => ({ error: { message: 'retry failed' } }));
+    // API's own MaxRequestDurationExceeded timeout on Microsoft's side.
+    // Vercel can route requests to different concurrent serverless instances,
+    // each with its own separate in-memory cache, so a cold instance with no
+    // warm cache can still fail outright — up to 3 attempts with a short
+    // backoff delay before giving up, on top of the cross-request cache.
+    const safeGetWithRetry = async (path, attempts = 3) => {
+      let result = { error: { message: 'not attempted' } };
+      for (let i = 0; i < attempts; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 500));
+        result = await graphGet(path).catch(e => ({ error: { message: e.message } }));
+        if (!result.error && result.values && result.values.length > 1) break;
       }
       if (!result.error && result.values && result.values.length > 1) {
         sheetCache[path] = result.values;
