@@ -577,8 +577,8 @@ app.get('/api/debug/peek-any', async (req, res) => {
     const { driveId, itemId, sheet } = req.query;
     if (!driveId || !itemId || !sheet) return res.status(400).json({ error: 'pass ?driveId=&itemId=&sheet=' });
     const enc = encodeURIComponent(sheet);
-    const raw = await graphGet(`/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/usedRange`);
-    res.json({ values: raw.values || [], error: raw.error });
+    const raw = await graphGet(`/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/usedRange(valuesOnly=true)?$select=address,values`);
+    res.json({ values: raw.values || [], address: raw.address, error: raw.error });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
