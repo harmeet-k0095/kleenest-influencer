@@ -270,8 +270,13 @@ function countOrdersFromSheet(values, statusValues, targetYM) {
   const productIdx  = headers.findIndex(h => /PRODUCT.?NAME/i.test(String(h)));
   const dateIdx     = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
   if (statusIdx < 0 || usernameIdx < 0) return 0;
-  // Deduplicate by (username + product) to avoid double-counting when a row
-  // progresses from "Order Placed" → "Live" and both rows exist in the sheet.
+  // Deduplicate by (username + product + order date) to avoid double-counting
+  // when a row progresses from "Order Placed" → "Live" and both rows exist in
+  // the sheet. Date is required in the key — the same creator legitimately
+  // re-orders the same product on a later date sometimes, and a key without
+  // date would wrongly collapse those into a single order (confirmed against
+  // real data: e.g. Akanksha's sheet had the same creator order "Magic Eraser"
+  // on two different dates, six days apart — two real orders, not one).
   const seen = new Set();
   let count = 0;
   rows.forEach(r => {
@@ -280,7 +285,8 @@ function countOrdersFromSheet(values, statusValues, targetYM) {
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return;
     if (dateIdx >= 0 && (!r[dateIdx] || !isInTargetMonth(r[dateIdx], targetYM))) return;
     const product = productIdx >= 0 ? String(r[productIdx] || '').trim().toLowerCase() : '';
-    const key = `${user.toLowerCase()}||${product}`;
+    const date = dateIdx >= 0 ? String(r[dateIdx] || '') : '';
+    const key = `${user.toLowerCase()}||${product}||${date}`;
     if (seen.has(key)) return;
     seen.add(key);
     count++;
@@ -298,12 +304,20 @@ function countOrdersBySkuFromSheet(values, statusValues, targetYM) {
   const productIdx  = headers.findIndex(h => /PRODUCT.?NAME/i.test(String(h)));
   const dateIdx     = headers.findIndex(h => /ORDER.?DATE/i.test(String(h)));
   if (statusIdx < 0 || usernameIdx < 0 || productIdx < 0) return {};
+  // Same (username + product + order date) dedup as countOrdersFromSheet, so
+  // the SKU-wise breakdown always sums to exactly the same total.
+  const seen = new Set();
   const skuMap = {};
   rows.forEach(r => {
-    if (!r[usernameIdx] || !String(r[usernameIdx]).trim() || String(r[usernameIdx]).trim() === '#N/A') return;
+    const user = String(r[usernameIdx] || '').trim();
+    if (!user || user === '#N/A') return;
     if (!statusValues.some(sv => String(r[statusIdx]).trim().toLowerCase() === sv.toLowerCase())) return;
     if (dateIdx >= 0 && (!r[dateIdx] || !isInTargetMonth(r[dateIdx], targetYM))) return;
     const raw = String(r[productIdx] || '').trim();
+    const date = dateIdx >= 0 ? String(r[dateIdx] || '') : '';
+    const key = `${user.toLowerCase()}||${raw.toLowerCase()}||${date}`;
+    if (seen.has(key)) return;
+    seen.add(key);
     const sku = normAgencyProduct(raw) || raw || 'Unknown';
     skuMap[sku] = (skuMap[sku] || 0) + 1;
   });
