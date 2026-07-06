@@ -571,6 +571,19 @@ app.get('/api/debug/resolve-any', async (req, res) => {
   }
 });
 
+// ── /api/debug/peek-any — usedRange of a specific tab, by driveId+itemId ─────
+app.get('/api/debug/peek-any', async (req, res) => {
+  try {
+    const { driveId, itemId, sheet } = req.query;
+    if (!driveId || !itemId || !sheet) return res.status(400).json({ error: 'pass ?driveId=&itemId=&sheet=' });
+    const enc = encodeURIComponent(sheet);
+    const raw = await graphGet(`/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/usedRange`);
+    res.json({ values: raw.values || [], error: raw.error });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/resolve-share — find file ID from a SharePoint share URL ──────
 app.get('/api/debug/resolve-share', async (req, res) => {
   try {
