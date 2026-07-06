@@ -584,6 +584,46 @@ app.get('/api/debug/peek-any', async (req, res) => {
   }
 });
 
+// ── /api/debug/patch-any — write a range on any drive/item/sheet ─────────────
+// Body: { driveId, itemId, sheet, address, values }
+app.post('/api/debug/patch-any', async (req, res) => {
+  try {
+    const { driveId, itemId, sheet, address, values } = req.body || {};
+    if (!driveId || !itemId || !sheet || !address || !values) {
+      return res.status(400).json({ error: 'pass driveId, itemId, sheet, address, values' });
+    }
+    const enc = encodeURIComponent(sheet);
+    const result = await graphPatch(
+      `/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/range(address='${address}')`,
+      { values }
+    );
+    res.json({ result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── /api/debug/add-sheet-any — add a new worksheet to any drive/item ────────
+app.post('/api/debug/add-sheet-any', async (req, res) => {
+  try {
+    const { driveId, itemId, name } = req.body || {};
+    if (!driveId || !itemId || !name) return res.status(400).json({ error: 'pass driveId, itemId, name' });
+    const token = await getToken();
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets/add`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }
+    );
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/resolve-share — find file ID from a SharePoint share URL ──────
 app.get('/api/debug/resolve-share', async (req, res) => {
   try {
