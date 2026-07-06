@@ -815,34 +815,6 @@ app.get('/api/debug/priyanka-months', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── /api/debug/may-targets-full — full untrimmed May Targets tab + address ──
-app.get('/api/debug/may-targets-full', async (req, res) => {
-  try {
-    const hmBase = `/users/${HARMEET_USER}/drive/items`;
-    const raw = await graphGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange(valuesOnly=true)?$select=address,values`);
-    res.json({ address: raw.address, values: raw.values || [], error: raw.error });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── /api/debug/may-targets-patch — narrow write, scoped to May Targets tab ──
-// Body: { address, values }
-app.post('/api/debug/may-targets-patch', async (req, res) => {
-  try {
-    const { address, values } = req.body || {};
-    if (!address || !values) return res.status(400).json({ error: 'pass address, values' });
-    const hmBase = `/users/${HARMEET_USER}/drive/items`;
-    const result = await graphPatch(
-      `${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/range(address='${address}')`,
-      { values }
-    );
-    res.json({ result });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── /api/debug/targets-raw — inspect raw April/May target tab structures ─────
 app.get('/api/debug/targets-raw', async (req, res) => {
   try {
