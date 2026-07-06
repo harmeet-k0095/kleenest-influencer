@@ -851,8 +851,22 @@ app.get('/api/dashboard', async (req, res) => {
     const hmBase  = `/users/${HARMEET_USER}/drive/items`;
 
     // Fetch all sheets in parallel
-    // Helper: gracefully return empty if a sheet fetch fails (renamed/deleted tabs)
-    const safeGet = path => graphGet(path).catch(() => ({ values: [] }));
+    // Helper: gracefully return empty if a sheet fetch fails (renamed/deleted
+    // tabs). Some large sheets (e.g. INK REVENUE) intermittently hit Graph
+    // API's own MaxRequestDurationExceeded timeout on their end — retry a
+    // couple of times before giving up, since immediately falling back to
+    // empty data silently zeroed out real numbers on a flaky first attempt.
+    const safeGet = async (path, attempts = 2) => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const r = await graphGet(path);
+          if (r.error) throw new Error(r.error.message || 'graph error');
+          return r;
+        } catch (e) {
+          if (i === attempts - 1) return { values: [] };
+        }
+      }
+    };
 
     // Try multiple possible names for the live tab (it keeps getting renamed)
     // valuesOnly=true avoids Graph API's RangeExceedsLimit error on sheets with
