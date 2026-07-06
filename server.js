@@ -815,52 +815,6 @@ app.get('/api/debug/priyanka-months', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── /api/debug/targets-full — TEMP: full untrimmed target tab + address ─────
-app.get('/api/debug/targets-full', async (req, res) => {
-  try {
-    const tab = req.query.tab || 'May Targets';
-    const hmBase = `/users/${HARMEET_USER}/drive/items`;
-    const enc = encodeURIComponent(tab);
-    const raw = await graphGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('${enc}')/usedRange(valuesOnly=true)?$select=address,values`);
-    res.json({ address: raw.address, values: raw.values || [], error: raw.error });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── /api/debug/add-sheet-temp — TEMP: add worksheet to APRIL_PLAN_ID file ────
-app.post('/api/debug/add-sheet-temp', async (req, res) => {
-  try {
-    const { name } = req.body || {};
-    if (!name) return res.status(400).json({ error: 'pass name' });
-    const token = await getToken();
-    const r = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${HARMEET_USER}/drive/items/${APRIL_PLAN_ID}/workbook/worksheets/add`,
-      { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }
-    );
-    res.json(await r.json());
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── /api/debug/patch-temp — TEMP: write a range in APRIL_PLAN_ID's given tab ─
-app.post('/api/debug/patch-temp', async (req, res) => {
-  try {
-    const { tab, address, values } = req.body || {};
-    if (!tab || !address || !values) return res.status(400).json({ error: 'pass tab, address, values' });
-    const hmBase = `/users/${HARMEET_USER}/drive/items`;
-    const enc = encodeURIComponent(tab);
-    const result = await graphPatch(
-      `${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('${enc}')/range(address='${address}')`,
-      { values }
-    );
-    res.json({ result });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── /api/debug/targets-raw — inspect raw April/May target tab structures ─────
 app.get('/api/debug/targets-raw', async (req, res) => {
   try {
