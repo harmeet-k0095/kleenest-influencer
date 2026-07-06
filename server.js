@@ -632,6 +632,7 @@ app.get('/api/debug/ink', async (req, res) => {
   try {
     const agBase = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
     const raw = await graphGet(`${agBase}('INK%20REVENUE')/usedRange`);
+    if (raw.error) return res.json({ rawError: raw.error });
     const values = raw.values || [];
     const headers = values[0] || [];
     const rows = values.slice(1);
