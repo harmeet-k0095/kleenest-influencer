@@ -815,6 +815,22 @@ app.get('/api/debug/priyanka-months', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── /api/debug/may-targets-patch — TEMP: revert erroneous May Targets write ──
+app.post('/api/debug/may-targets-patch', async (req, res) => {
+  try {
+    const { address, values } = req.body || {};
+    if (!address || !values) return res.status(400).json({ error: 'pass address, values' });
+    const hmBase = `/users/${HARMEET_USER}/drive/items`;
+    const result = await graphPatch(
+      `${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/range(address='${address}')`,
+      { values }
+    );
+    res.json({ result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/targets-raw — inspect raw April/May target tab structures ─────
 app.get('/api/debug/targets-raw', async (req, res) => {
   try {
