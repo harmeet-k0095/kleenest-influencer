@@ -28,6 +28,14 @@ const HARDEV_FILE_ID = process.env.HARDEV_FILE_ID || '01SI4WURPWNPRBPVDTHRGIQXZX
 const SATYAM_FILE_ID = process.env.SATYAM_FILE_ID || '01SI4WURNN6K7X3VGRBBA345MHU3WFADKB';
 const APRIL_PLAN_ID  = process.env.APRIL_PLAN_ID  || '01SI4WUROWDSIEW7TMSBEJ6RXUIHMPUGKZ';
 
+// Current in-house team's individual order sheets (priyanka's drive) — replaced
+// Mohit/Hardev as of June 2026. Satyam stays on harmeet's drive (SATYAM_FILE_ID above).
+const RENUKA_FILE_ID  = process.env.RENUKA_FILE_ID  || '01I5S75AJ6DOVLAKUZIRG3STTXLGGDN7GY';
+const AKANSHA_FILE_ID = process.env.AKANSHA_FILE_ID || '01I5S75AIMJRESI5E5RFBYHS4GTKQIKE7A';
+const ANJALI_FILE_ID  = process.env.ANJALI_FILE_ID  || '01I5S75AJUPGZ775MBEJC27CB3LRFUM4HJ';
+const VANSHIKA_FILE_ID= process.env.VANSHIKA_FILE_ID|| '01I5S75ALMN2DPY4HEHBAL34J4U2GOSA74';
+const HARNOOR_FILE_ID = process.env.HARNOOR_FILE_ID || '01I5S75AK5QPOT2REYKJHJRKDJWMJGSXHN';
+
 // ── Token Cache ──────────────────────────────────────────────────────────────
 let tokenCache = { token: null, expiresAt: 0 };
 
@@ -82,7 +90,9 @@ function normProduct(p) { return normAgencyProduct(p); }
 function normPOC(p) {
   if (!p) return 'Unassigned';
   const m = { hardev: 'Hardev', 'hardev gill': 'Hardev', sattyam: 'Satyam', satyam: 'Satyam',
-               priyanka: 'Priyanka', mohit: 'Mohit' };
+               priyanka: 'Priyanka', mohit: 'Mohit',
+               renuka: 'Renuka', akanksha: 'Akanksha', akansha: 'Akanksha', akanskha: 'Akanksha',
+               anjali: 'Anjali', vanshika: 'Vanshika', harnoor: 'Harnoor' };
   return m[p.trim().toLowerCase()] || p.trim();
 }
 
@@ -349,6 +359,8 @@ function parseTargetTabOrders(tabValues) {
   }
 
   // Team POC targets — "Orders Placed - In-house" section
+  // Current in-house team (replaced Mohit/Hardev as of June 2026).
+  const ACTIVE_TEAM = ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Vanshika', 'Harnoor'];
   const teamTargets = {};
   let inSection = false;
   tabValues.forEach(row => {
@@ -357,7 +369,7 @@ function parseTargetTabOrders(tabValues) {
     if (inSection) {
       const name = normPOC(label);
       const num  = Number(row[1]);
-      if (['Mohit', 'Hardev', 'Satyam', 'Priyanka'].includes(name) && num > 0) teamTargets[name] = num;
+      if (ACTIVE_TEAM.includes(name) && num > 0) teamTargets[name] = num;
     }
   });
 
@@ -874,26 +886,37 @@ app.get('/api/dashboard', async (req, res) => {
       return { values: [] };
     };
 
+    // Generic: try each candidate tab name until one returns real data — tab
+    // names vary slightly per person's file (casing/trailing-space differences).
+    const fetchNamedTab = async (user, fileId, candidateNames) => {
+      for (const name of candidateNames) {
+        const r = await safeGet(`/users/${user}/drive/items/${fileId}/workbook/worksheets('${encodeURIComponent(name)}')/usedRange`);
+        if (r.values && r.values.length > 1) return r;
+      }
+      return { values: [] };
+    };
+
     const agBase         = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
-    const priyankaTfcBase = `/users/${PRIYANKA_USER}/drive/items/${PRIYANKA_TFC_ID}/workbook/worksheets`;
 
     // Fetch April + May target tabs in parallel (both needed for month-aware targets)
     const [
       liveRaw, targetRaw,
-      mohitRaw, hardevRaw, satyamRaw, satyamAprilRaw,
-      aprilTargetRaw, mayTargetRaw, ttcRaw, inkRaw, priyankaTfcRaw,
+      renukaRaw, akanshaRaw, anjaliRaw, vanshikaRaw, harnoorRaw, satyamRaw, satyamAprilRaw,
+      aprilTargetRaw, mayTargetRaw, ttcRaw, inkRaw,
     ] = await Promise.all([
       fetchLiveTab(),
       safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange`),
-      safeGet(`${hmBase}/${MOHIT_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
-      safeGet(`${hmBase}/${HARDEV_FILE_ID}/workbook/worksheets('Main%20Sheet')/usedRange`),
+      fetchNamedTab(PRIYANKA_USER, RENUKA_FILE_ID,   ['Main sheet ', 'Main Sheet', 'Main sheet']),
+      fetchNamedTab(PRIYANKA_USER, AKANSHA_FILE_ID,  ['Main Sheet ', 'Main Sheet']),
+      fetchNamedTab(PRIYANKA_USER, ANJALI_FILE_ID,   ['Main Sheet']),
+      fetchNamedTab(PRIYANKA_USER, VANSHIKA_FILE_ID, ['Main Sheet']),
+      fetchNamedTab(PRIYANKA_USER, HARNOOR_FILE_ID,  ['Main Sheet']),
       fetchSatyamTab(),                                // May (or first available) Satyam sheet
       safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange`),
       safeGet(`${agBase}('TTC')/usedRange`),
       safeGet(`${agBase}('INK%20REVENUE')/usedRange`),
-      safeGet(`${priyankaTfcBase}('Sheet1')/usedRange`),
     ]);
 
     // ── Derive target month: prefer May if it has data, fall back to April ───
@@ -1006,7 +1029,7 @@ app.get('/api/dashboard', async (req, res) => {
     const orderTargets   = _activeOrders.skuOrderTargets;
     const teamTargets    = Object.keys(_activeOrders.teamTargets).length
       ? _activeOrders.teamTargets
-      : { Mohit: 300, Satyam: 200, Hardev: 200, Priyanka: 100 };
+      : { Renuka: 200, Satyam: 250, Akanksha: 250, Anjali: 60 };
 
     // ── Helper: build pocOrders + pocSkuOrders for a given month ────────────
     const ORDER_STATUSES = ['order place', 'order placed', 'live'];
@@ -1016,16 +1039,20 @@ app.get('/api/dashboard', async (req, res) => {
       return ym === `${_year}-04` && aprSheet ? aprSheet : satyamRaw.values;
     };
     const _pocOrdersFor = ym => ({
-      Mohit:    countOrdersFromSheet(mohitRaw.values,       ORDER_STATUSES, ym),
-      Hardev:   countOrdersFromSheet(hardevRaw.values,      ORDER_STATUSES, ym),
-      Satyam:   countOrdersFromSheet(_satyamFor(ym),        ORDER_STATUSES, ym),
-      Priyanka: countOrdersFromSheet(priyankaTfcRaw.values, ORDER_STATUSES, ym),
+      Renuka:   countOrdersFromSheet(renukaRaw.values,   ORDER_STATUSES, ym),
+      Satyam:   countOrdersFromSheet(_satyamFor(ym),     ORDER_STATUSES, ym),
+      Akanksha: countOrdersFromSheet(akanshaRaw.values,  ORDER_STATUSES, ym),
+      Anjali:   countOrdersFromSheet(anjaliRaw.values,   ORDER_STATUSES, ym),
+      Vanshika: countOrdersFromSheet(vanshikaRaw.values, ORDER_STATUSES, ym),
+      Harnoor:  countOrdersFromSheet(harnoorRaw.values,  ORDER_STATUSES, ym),
     });
     const _pocSkuOrdersFor = ym => ({
-      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,       ORDER_STATUSES, ym),
-      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values,      ORDER_STATUSES, ym),
-      Satyam:   countOrdersBySkuFromSheet(_satyamFor(ym),        ORDER_STATUSES, ym),
-      Priyanka: countOrdersBySkuFromSheet(priyankaTfcRaw.values, ORDER_STATUSES, ym),
+      Renuka:   countOrdersBySkuFromSheet(renukaRaw.values,   ORDER_STATUSES, ym),
+      Satyam:   countOrdersBySkuFromSheet(_satyamFor(ym),     ORDER_STATUSES, ym),
+      Akanksha: countOrdersBySkuFromSheet(akanshaRaw.values,  ORDER_STATUSES, ym),
+      Anjali:   countOrdersBySkuFromSheet(anjaliRaw.values,   ORDER_STATUSES, ym),
+      Vanshika: countOrdersBySkuFromSheet(vanshikaRaw.values, ORDER_STATUSES, ym),
+      Harnoor:  countOrdersBySkuFromSheet(harnoorRaw.values,  ORDER_STATUSES, ym),
     });
 
     // Orders for the active target month (used in server KPIs)
