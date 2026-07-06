@@ -540,6 +540,37 @@ app.get('/api/debug/peek2', async (req, res) => {
   }
 });
 
+// ── /api/debug/resolve-any — resolve any SharePoint share URL to a driveItem ──
+// Query: ?url=<share url>  Optionally &user=priyanka|harmeet to try that user's
+// drive context too (share resolution works regardless via /shares/{id}).
+app.get('/api/debug/resolve-any', async (req, res) => {
+  try {
+    const shareUrl = req.query.url;
+    if (!shareUrl) return res.status(400).json({ error: 'pass ?url=' });
+    const encoded = 'u!' + Buffer.from(shareUrl).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const item = await graphGet(`/shares/${encoded}/driveItem`);
+    let tabs = null;
+    if (item.id && item['@microsoft.graph.downloadUrl'] !== undefined || item.id) {
+      // Try to list worksheets using the item's own driveId + itemId (works across users)
+      const driveId = item.parentReference?.driveId;
+      if (driveId) {
+        const sheets = await graphGet(`/drives/${driveId}/items/${item.id}/workbook/worksheets`).catch(e => ({ error: e.message }));
+        tabs = sheets.value ? sheets.value.map(s => s.name) : sheets;
+      }
+    }
+    res.json({
+      id: item.id,
+      name: item.name,
+      driveId: item.parentReference?.driveId,
+      webUrl: item.webUrl,
+      error: item.error,
+      tabs,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/resolve-share — find file ID from a SharePoint share URL ──────
 app.get('/api/debug/resolve-share', async (req, res) => {
   try {
