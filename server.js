@@ -916,11 +916,11 @@ app.get('/api/dashboard', async (req, res) => {
 
     const agBase         = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
 
-    // Fetch April + May target tabs in parallel (both needed for month-aware targets)
+    // Fetch April + May + June target tabs in parallel (needed for month-aware targets)
     const [
       liveRaw, targetRaw,
       renukaRaw, akanshaRaw, anjaliRaw, vanshikaRaw, harnoorRaw, satyamRaw, satyamAprilRaw,
-      aprilTargetRaw, mayTargetRaw, ttcRaw, inkRaw,
+      aprilTargetRaw, mayTargetRaw, juneTargetRaw, ttcRaw, inkRaw,
     ] = await Promise.all([
       fetchLiveTab(),
       safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange`),
@@ -933,18 +933,20 @@ app.get('/api/dashboard', async (req, res) => {
       safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange`),
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('June%20Targets')/usedRange`),
       safeGet(`${agBase}('TTC')/usedRange`),
       safeGet(`${agBase}('INK%20REVENUE')/usedRange`),
     ]);
 
-    // ── Derive target month: prefer May if it has data, fall back to April ───
+    // ── Derive target month: prefer June, then May, then April ───────────────
     const MONTH_NUMS = { January:'01',February:'02',March:'03',April:'04',May:'05',
                          June:'06',July:'07',August:'08',September:'09',
                          October:'10',November:'11',December:'12' };
+    const juneHasData  = (juneTargetRaw.values  || []).length > 5;
     const mayHasData   = (mayTargetRaw.values   || []).length > 5;
     const aprilHasData = (aprilTargetRaw.values || []).length > 5;
-    const _targetTabName = mayHasData ? 'May Targets' : aprilHasData ? 'April Targets' : '';
-    const targetTabRaw   = mayHasData ? mayTargetRaw : aprilHasData ? aprilTargetRaw : { values: [] };
+    const _targetTabName = juneHasData ? 'June Targets' : mayHasData ? 'May Targets' : aprilHasData ? 'April Targets' : '';
+    const targetTabRaw   = juneHasData ? juneTargetRaw : mayHasData ? mayTargetRaw : aprilHasData ? aprilTargetRaw : { values: [] };
     const _monthName     = _targetTabName.replace(' Targets', '').trim();
     const _monthNum      = MONTH_NUMS[_monthName];
     const targetMonth    = _monthNum ? `${new Date().getFullYear()}-${_monthNum}` : null;
@@ -1035,15 +1037,17 @@ app.get('/api/dashboard', async (req, res) => {
     // ── Parse Targets Tab (active month) ────────────────────────────────────
     const targetTabValues = targetTabRaw.values || [];
 
-    // ── Parse order + reel targets for both April and May ────────────────────
+    // ── Parse order + reel targets for April, May, and June ──────────────────
     const _year      = new Date().getFullYear();
     const _aprOrders = parseTargetTabOrders(aprilTargetRaw.values);
     const _mayOrders = parseTargetTabOrders(mayTargetRaw.values);
+    const _junOrders = parseTargetTabOrders(juneTargetRaw.values);
     const _aprReel   = parseTargetTabOverall(aprilTargetRaw.values);
     const _mayReel   = parseTargetTabOverall(mayTargetRaw.values);
+    const _junReel   = parseTargetTabOverall(juneTargetRaw.values);
 
     // Active-month targets (drives server-side KPIs)
-    const _activeOrders  = mayHasData ? _mayOrders : aprilHasData ? _aprOrders : { skuOrderTargets:{}, teamTargets:{}, inhouseOrderTarget:0, overallOrderTarget:0 };
+    const _activeOrders  = juneHasData ? _junOrders : mayHasData ? _mayOrders : aprilHasData ? _aprOrders : { skuOrderTargets:{}, teamTargets:{}, inhouseOrderTarget:0, overallOrderTarget:0 };
     const orderTargets   = _activeOrders.skuOrderTargets;
     const teamTargets    = Object.keys(_activeOrders.teamTargets).length
       ? _activeOrders.teamTargets
@@ -1089,6 +1093,11 @@ app.get('/api/dashboard', async (req, res) => {
       ..._mayReel, ..._mayOrders,
       pocOrders:    _pocOrdersFor(`${_year}-05`),
       pocSkuOrders: _pocSkuOrdersFor(`${_year}-05`),
+    };
+    if (_junReel) monthlyTargets[`${_year}-06`] = {
+      ..._junReel, ..._junOrders,
+      pocOrders:    _pocOrdersFor(`${_year}-06`),
+      pocSkuOrders: _pocSkuOrdersFor(`${_year}-06`),
     };
 
     // ── Aggregates ───────────────────────────────────────────────────────────
@@ -1293,7 +1302,7 @@ app.get('/api/dashboard', async (req, res) => {
 
     const overallReelTarget  = skuTargets.reduce((s, x) => s + x.reelTarget, 0);
     // Reel live targets — use active parsed tab (fallback hardcodes)
-    const _activeReel       = mayHasData ? _mayReel : aprilHasData ? _aprReel : null;
+    const _activeReel       = juneHasData ? _junReel : mayHasData ? _mayReel : aprilHasData ? _aprReel : null;
     const inhouseReelTarget = _activeReel?.inhouseReelTarget || 525;
     const agencyTtcTarget   = _activeReel?.agencyTtcTarget   || 0;
     const agencyInkTarget   = _activeReel?.agencyInkTarget   || 0;
