@@ -39,6 +39,13 @@ const HARNOOR_FILE_ID = process.env.HARNOOR_FILE_ID || '01I5S75AK5QPOT2REYKJHJRK
 // ── Token Cache ──────────────────────────────────────────────────────────────
 let tokenCache = { token: null, expiresAt: 0 };
 
+// ── Last-known-good sheet cache ───────────────────────────────────────────────
+// Some large sheets (TTC, INK REVENUE) intermittently fail with Graph API's
+// own MaxRequestDurationExceeded timeout. A serverless instance stays warm
+// across consecutive requests, so caching the last successful fetch here lets
+// a failed fetch fall back to real data instead of silently going to zero.
+const sheetCache = {};
+
 async function getToken() {
   if (tokenCache.token && Date.now() < tokenCache.expiresAt) return tokenCache.token;
   const res = await fetch(
@@ -856,14 +863,23 @@ app.get('/api/dashboard', async (req, res) => {
 
     // TTC and INK REVENUE are large sheets that intermittently hit Graph
     // API's own MaxRequestDurationExceeded timeout on Microsoft's side
-    // (observed directly: 2 of 3 attempts succeeded, 1 timed out). A single
-    // retry here (not applied to every sheet — that pushed the whole request
-    // closer to Vercel's 60s cap and made previously-stable fetches flaky
-    // too) fixes this without adding broad latency risk.
+    // (observed directly: sometimes both attempts fail in the same request).
+    // One retry helps but isn't fully reliable, so on top of that we fall
+    // back to the last successful fetch (cached at module scope, so it
+    // survives across requests on a warm serverless instance) instead of
+    // going all the way to empty/zero.
     const safeGetWithRetry = async (path) => {
       const first = await graphGet(path).catch(e => ({ error: { message: e.message } }));
-      if (!first.error) return first;
-      return graphGet(path).catch(() => ({ values: [] }));
+      let result = first;
+      if (first.error) {
+        result = await graphGet(path).catch(() => ({ error: { message: 'retry failed' } }));
+      }
+      if (!result.error && result.values && result.values.length > 1) {
+        sheetCache[path] = result.values;
+        return result;
+      }
+      if (sheetCache[path]) return { values: sheetCache[path] };
+      return { values: [] };
     };
 
     // Try multiple possible names for the live tab (it keeps getting renamed)
