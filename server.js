@@ -583,6 +583,19 @@ app.get('/api/debug/resolve-any', async (req, res) => {
   }
 });
 
+// ── /api/debug/peek-user — TEMP: usedRange via /users/{user}/drive path ─────
+app.get('/api/debug/peek-user', async (req, res) => {
+  try {
+    const { user, fileId, sheet } = req.query;
+    if (!user || !fileId || !sheet) return res.status(400).json({ error: 'pass ?user=&fileId=&sheet=' });
+    const enc = encodeURIComponent(sheet);
+    const raw = await graphGet(`/users/${user}/drive/items/${fileId}/workbook/worksheets('${enc}')/usedRange`);
+    res.json({ rowCount: (raw.values||[]).length, headers: (raw.values||[])[0], error: raw.error });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/peek-any — usedRange of a specific tab, by driveId+itemId ─────
 app.get('/api/debug/peek-any', async (req, res) => {
   try {
