@@ -851,21 +851,19 @@ app.get('/api/dashboard', async (req, res) => {
     const hmBase  = `/users/${HARMEET_USER}/drive/items`;
 
     // Fetch all sheets in parallel
-    // Helper: gracefully return empty if a sheet fetch fails (renamed/deleted
-    // tabs). Some large sheets (e.g. INK REVENUE) intermittently hit Graph
-    // API's own MaxRequestDurationExceeded timeout on their end — retry a
-    // couple of times before giving up, since immediately falling back to
-    // empty data silently zeroed out real numbers on a flaky first attempt.
-    const safeGet = async (path, attempts = 2) => {
-      for (let i = 0; i < attempts; i++) {
-        try {
-          const r = await graphGet(path);
-          if (r.error) throw new Error(r.error.message || 'graph error');
-          return r;
-        } catch (e) {
-          if (i === attempts - 1) return { values: [] };
-        }
-      }
+    // Helper: gracefully return empty if a sheet fetch fails (renamed/deleted tabs)
+    const safeGet = path => graphGet(path).catch(() => ({ values: [] }));
+
+    // TTC and INK REVENUE are large sheets that intermittently hit Graph
+    // API's own MaxRequestDurationExceeded timeout on Microsoft's side
+    // (observed directly: 2 of 3 attempts succeeded, 1 timed out). A single
+    // retry here (not applied to every sheet — that pushed the whole request
+    // closer to Vercel's 60s cap and made previously-stable fetches flaky
+    // too) fixes this without adding broad latency risk.
+    const safeGetWithRetry = async (path) => {
+      const first = await graphGet(path).catch(e => ({ error: { message: e.message } }));
+      if (!first.error) return first;
+      return graphGet(path).catch(() => ({ values: [] }));
     };
 
     // Try multiple possible names for the live tab (it keeps getting renamed)
@@ -921,8 +919,8 @@ app.get('/api/dashboard', async (req, res) => {
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange(valuesOnly=true)`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange(valuesOnly=true)`),
       safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('June%20Targets')/usedRange(valuesOnly=true)`),
-      safeGet(`${agBase}('TTC')/usedRange(valuesOnly=true)`),
-      safeGet(`${agBase}('INK%20REVENUE')/usedRange(valuesOnly=true)`),
+      safeGetWithRetry(`${agBase}('TTC')/usedRange(valuesOnly=true)`),
+      safeGetWithRetry(`${agBase}('INK%20REVENUE')/usedRange(valuesOnly=true)`),
     ]);
 
     // ── Derive target month: prefer June, then May, then April ───────────────
