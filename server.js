@@ -174,6 +174,62 @@ const MONTH_NAME_TO_NUM = {
   july:'07',august:'08',september:'09',october:'10',november:'11',december:'12',
 };
 
+// ── Compute all agency (TTC + INK REVENUE) KPIs for a given target month ────
+// Shared by /api/dashboard and the standalone /api/agency-live endpoint, so
+// the latter can retry independently with its own timeout budget without
+// dragging down the main dashboard call.
+function computeAgencyData(ttcRawValues, inkRawValues, targetMonth) {
+  const ttcInfluencers = parseAgencySheet(ttcRawValues, 'TTC');
+  const inkInfluencers = parseAgencySheet(inkRawValues, 'INK REVENUE');
+  const agencyInfluencers = [...ttcInfluencers, ...inkInfluencers];
+
+  const isLiveSocial = url => {
+    const u = String(url || '').trim();
+    return u.includes('instagram.com') || u.includes('youtube.com') || u.includes('youtu.be');
+  };
+  const isLive = inf => inf.liveLink && isLiveSocial(inf.liveLink);
+  const isAgencyInMonth = inf => {
+    if (!targetMonth) return true;
+    const ym = inf.closingMonthYM || inf.liveDate?.slice(0, 7);
+    return ym === targetMonth;
+  };
+  const isLiveInMonth = inf => isLive(inf) && isAgencyInMonth(inf);
+
+  const ttcReelsLive    = ttcInfluencers.filter(isLiveInMonth).length;
+  const inkReelsLive    = inkInfluencers.filter(isLiveInMonth).length;
+  const agencyReelsLive = ttcReelsLive + inkReelsLive;
+
+  const ttcSkuActuals    = {};
+  const inkSkuActuals    = {};
+  const agencySkuActuals = {};
+  const addSku = (map, inf) => {
+    const p = inf.product; if (!p) return;
+    map[p] = (map[p] || 0) + 1;
+    agencySkuActuals[p] = (agencySkuActuals[p] || 0) + 1;
+  };
+  ttcInfluencers.forEach(inf => { if (isLiveInMonth(inf)) addSku(ttcSkuActuals, inf); });
+  inkInfluencers.forEach(inf => { if (isLiveInMonth(inf)) addSku(inkSkuActuals, inf); });
+
+  let ttcReelsReelAmt = 0, ttcReelsProductAmt = 0;
+  let inkReelsReelAmt = 0, inkReelsProductAmt = 0;
+  ttcInfluencers.forEach(inf => { if (!isLiveInMonth(inf)) return; ttcReelsReelAmt += inf.reelAmt; ttcReelsProductAmt += inf.productAmt; });
+  inkInfluencers.forEach(inf => { if (!isLiveInMonth(inf)) return; inkReelsReelAmt += inf.reelAmt; inkReelsProductAmt += inf.productAmt; });
+  const ttcReelsPayout       = ttcReelsReelAmt + ttcReelsProductAmt;
+  const inkReelsPayout       = inkReelsReelAmt + inkReelsProductAmt;
+  const agencyReelsReelAmt   = ttcReelsReelAmt + inkReelsReelAmt;
+  const agencyReelsProductAmt= ttcReelsProductAmt + inkReelsProductAmt;
+  const agencyReelsPayout    = agencyReelsReelAmt + agencyReelsProductAmt;
+
+  return {
+    agencyInfluencers,
+    ttcReelsLive, inkReelsLive, agencyReelsLive,
+    ttcSkuActuals, inkSkuActuals, agencySkuActuals,
+    ttcReelsReelAmt, ttcReelsProductAmt, ttcReelsPayout,
+    inkReelsReelAmt, inkReelsProductAmt, inkReelsPayout,
+    agencyReelsReelAmt, agencyReelsProductAmt, agencyReelsPayout,
+  };
+}
+
 function parseAgencySheet(values, sourceName) {
   if (!values || values.length < 2) return [];
   const headers = values[0];
@@ -851,6 +907,47 @@ app.get('/api/debug/targets-raw', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── /api/agency-live — TTC + INK REVENUE data fetched independently ─────────
+// TTC and INK REVENUE intermittently hit Graph API's own timeout. Fetching
+// them here, decoupled from /api/dashboard's other ~12 parallel calls, means
+// this endpoint can retry more aggressively with its own full time budget
+// without risking the whole dashboard load timing out. The frontend calls
+// this after the main dashboard loads and merges in the result, so a slow
+// or retried fetch here only delays the agency-specific numbers, not the
+// rest of the page.
+// Query: ?month=YYYY-MM (should be RAW.targetMonth from the main dashboard)
+app.get('/api/agency-live', async (req, res) => {
+  try {
+    const targetMonth = req.query.month || null;
+    const agBase = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
+
+    const fetchWithRetries = async (path, attempts = 4) => {
+      let result = { error: { message: 'not attempted' } };
+      for (let i = 0; i < attempts; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 700));
+        result = await graphGet(path).catch(e => ({ error: { message: e.message } }));
+        if (!result.error && result.values && result.values.length > 1) break;
+      }
+      if (!result.error && result.values && result.values.length > 1) {
+        sheetCache[path] = result.values;
+        return result;
+      }
+      if (sheetCache[path]) return { values: sheetCache[path] };
+      return { values: [] };
+    };
+
+    const [ttcRaw, inkRaw] = await Promise.all([
+      fetchWithRetries(`${agBase}('TTC')/usedRange(valuesOnly=true)`),
+      fetchWithRetries(`${agBase}('INK%20REVENUE')/usedRange(valuesOnly=true)`),
+    ]);
+
+    const data = computeAgencyData(ttcRaw.values, inkRaw.values, targetMonth);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/dashboard ───────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {
@@ -1218,57 +1315,14 @@ app.get('/api/dashboard', async (req, res) => {
     });
 
     // ── Agency: parse TTC + INK REVENUE sheets ───────────────────────────────
-    const ttcInfluencers = parseAgencySheet(ttcRaw.values,  'TTC');
-    const inkInfluencers = parseAgencySheet(inkRaw.values,  'INK REVENUE');
-    // All agency rows across all months — sent to client for table display / month filter browsing
-    const _allAgencyInfluencers = [...ttcInfluencers, ...inkInfluencers];
-
-    // Count rows with Instagram or YouTube Shorts links as "live reels".
-    // Amazon affiliate links and other non-social URLs in the Live Link column are excluded.
-    const isLiveSocial = url => {
-      const u = String(url || '').trim();
-      return u.includes('instagram.com') || u.includes('youtube.com') || u.includes('youtu.be');
-    };
-    const isLive = inf => inf.liveLink && isLiveSocial(inf.liveLink);
-
-    // Filter agency row to target month: match closingMonthYM, falling back to liveDate
-    const isAgencyInMonth = inf => {
-      if (!targetMonth) return true;                              // no month set → include all
-      const ym = inf.closingMonthYM || inf.liveDate?.slice(0, 7);
-      return ym === targetMonth;
-    };
-    const isLiveInMonth = inf => isLive(inf) && isAgencyInMonth(inf);
-
-    // Send ALL months to client — client-side month filter handles per-month browsing
-    const agencyInfluencers = _allAgencyInfluencers;
-
-    // Per-agency live counts (target-month filtered)
-    const ttcReelsLive    = ttcInfluencers.filter(isLiveInMonth).length;
-    const inkReelsLive    = inkInfluencers.filter(isLiveInMonth).length;
-    const agencyReelsLive = ttcReelsLive + inkReelsLive;
-
-    // Per-agency SKU actuals (target-month filtered)
-    const ttcSkuActuals    = {};
-    const inkSkuActuals    = {};
-    const agencySkuActuals = {};
-    const addSku = (map, inf) => {
-      const p = inf.product; if (!p) return;
-      map[p] = (map[p] || 0) + 1;
-      agencySkuActuals[p] = (agencySkuActuals[p] || 0) + 1;
-    };
-    ttcInfluencers.forEach(inf => { if (isLiveInMonth(inf)) addSku(ttcSkuActuals, inf); });
-    inkInfluencers.forEach(inf => { if (isLiveInMonth(inf)) addSku(inkSkuActuals, inf); });
-
-    // Per-agency payout (target-month filtered)
-    let ttcReelsReelAmt = 0, ttcReelsProductAmt = 0;
-    let inkReelsReelAmt = 0, inkReelsProductAmt = 0;
-    ttcInfluencers.forEach(inf => { if (!isLiveInMonth(inf)) return; ttcReelsReelAmt += inf.reelAmt; ttcReelsProductAmt += inf.productAmt; });
-    inkInfluencers.forEach(inf => { if (!isLiveInMonth(inf)) return; inkReelsReelAmt += inf.reelAmt; inkReelsProductAmt += inf.productAmt; });
-    const ttcReelsPayout    = ttcReelsReelAmt    + ttcReelsProductAmt;
-    const inkReelsPayout    = inkReelsReelAmt    + inkReelsProductAmt;
-    const agencyReelsReelAmt    = ttcReelsReelAmt    + inkReelsReelAmt;
-    const agencyReelsProductAmt = ttcReelsProductAmt + inkReelsProductAmt;
-    const agencyReelsPayout     = agencyReelsReelAmt + agencyReelsProductAmt;
+    const {
+      agencyInfluencers,
+      ttcReelsLive, inkReelsLive, agencyReelsLive,
+      ttcSkuActuals, inkSkuActuals, agencySkuActuals,
+      ttcReelsReelAmt, ttcReelsProductAmt, ttcReelsPayout,
+      inkReelsReelAmt, inkReelsProductAmt, inkReelsPayout,
+      agencyReelsReelAmt, agencyReelsProductAmt, agencyReelsPayout,
+    } = computeAgencyData(ttcRaw.values, inkRaw.values, targetMonth);
 
     // Count actual reels & orders per product from influencers
     const productActuals = {};

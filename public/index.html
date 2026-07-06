@@ -676,11 +676,46 @@ async function loadDashboard() {
     document.getElementById('loading').style.display = 'none';
     document.querySelectorAll('.tab-panel').forEach(p => p.style.display = '');
 
+    // TTC/INK REVENUE intermittently fail inside the main dashboard fetch
+    // (Graph API timeout on Microsoft's side) and can come back as 0. Refresh
+    // them independently — decoupled so a slow/retried fetch here never
+    // blocks or blanks out the rest of the page — and re-render once in.
+    refreshAgencyData();
+
   } catch (e) {
     document.getElementById('loading').style.display = 'none';
     const eb = document.getElementById('error-box');
     eb.style.display = 'block';
     eb.textContent = '⚠️ ' + e.message;
+  }
+}
+
+async function refreshAgencyData() {
+  try {
+    const res = await fetch(`/api/agency-live?month=${encodeURIComponent(RAW.targetMonth || '')}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    if (d.error) return;
+
+    Object.assign(RAW.kpis, {
+      ttcReelsLive: d.ttcReelsLive, inkReelsLive: d.inkReelsLive, agencyReelsLive: d.agencyReelsLive,
+      ttcReelsPayout: d.ttcReelsPayout, inkReelsPayout: d.inkReelsPayout, agencyReelsPayout: d.agencyReelsPayout,
+      ttcReelsReelAmt: d.ttcReelsReelAmt, ttcReelsProductAmt: d.ttcReelsProductAmt,
+      inkReelsReelAmt: d.inkReelsReelAmt, inkReelsProductAmt: d.inkReelsProductAmt,
+      agencyReelsReelAmt: d.agencyReelsReelAmt, agencyReelsProductAmt: d.agencyReelsProductAmt,
+      combinedReelsLive: (RAW.kpis.reelsLive || 0) + d.agencyReelsLive,
+      combinedPayout: (RAW.kpis.liveReelsPayout || 0) + d.agencyReelsPayout,
+    });
+    RAW.agencyInfluencers = d.agencyInfluencers;
+    RAW.ttcSkuActuals     = d.ttcSkuActuals;
+    RAW.inkSkuActuals     = d.inkSkuActuals;
+    RAW.agencySkuActuals  = d.agencySkuActuals;
+
+    populateFilters();
+    applyLiveFilters();
+    applyOrderFilters();
+  } catch (e) {
+    // Silent — the main dashboard already rendered with whatever it had.
   }
 }
 
