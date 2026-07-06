@@ -631,7 +631,7 @@ app.get('/api/debug/resolve-share', async (req, res) => {
 app.get('/api/debug/ink', async (req, res) => {
   try {
     const agBase = `/users/${PRIYANKA_USER}/drive/items/${AGENCY_FILE_ID}/workbook/worksheets`;
-    const raw = await graphGet(`${agBase}('INK%20REVENUE')/usedRange`);
+    const raw = await graphGet(`${agBase}('INK%20REVENUE')/usedRange(valuesOnly=true)`);
     if (raw.error) return res.json({ rawError: raw.error });
     const values = raw.values || [];
     const headers = values[0] || [];
@@ -855,10 +855,12 @@ app.get('/api/dashboard', async (req, res) => {
     const safeGet = path => graphGet(path).catch(() => ({ values: [] }));
 
     // Try multiple possible names for the live tab (it keeps getting renamed)
+    // valuesOnly=true avoids Graph API's RangeExceedsLimit error on sheets with
+    // excess formatting extending the usedRange beyond the actual data.
     const LIVE_TAB_NAMES = ['Live Inhouse', 'Live In-house', 'Live I', 'Live Sheet', 'Sheet1', 'Sheet2', 'SHeet 2'];
     const fetchLiveTab = async () => {
       for (const name of LIVE_TAB_NAMES) {
-        const r = await safeGet(`${prBase}('${encodeURIComponent(name)}')/usedRange`);
+        const r = await safeGet(`${prBase}('${encodeURIComponent(name)}')/usedRange(valuesOnly=true)`);
         if (r.values && r.values.length > 1) return r;
       }
       return { values: [] };
@@ -867,7 +869,7 @@ app.get('/api/dashboard', async (req, res) => {
     // Satyam keeps separate tabs per month; fetch both so we can count each month accurately
     const fetchSatyamTab = async () => {
       for (const name of ['May master sheet', 'April master sheet', 'Master sheet', 'Main Sheet']) {
-        const r = await safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('${encodeURIComponent(name)}')/usedRange`);
+        const r = await safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('${encodeURIComponent(name)}')/usedRange(valuesOnly=true)`);
         if (r.values && r.values.length > 1) return r;
       }
       return { values: [] };
@@ -894,19 +896,19 @@ app.get('/api/dashboard', async (req, res) => {
       aprilTargetRaw, mayTargetRaw, juneTargetRaw, ttcRaw, inkRaw,
     ] = await Promise.all([
       fetchLiveTab(),
-      safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange`),
+      safeGet(`${prBase}('Targets%20%3D%20P%20wise')/usedRange(valuesOnly=true)`),
       fetchNamedTab(PRIYANKA_USER, RENUKA_FILE_ID,   ['Main sheet ', 'Main Sheet', 'Main sheet']),
       fetchNamedTab(PRIYANKA_USER, AKANSHA_FILE_ID,  ['Main Sheet ', 'Main Sheet']),
       fetchNamedTab(PRIYANKA_USER, ANJALI_FILE_ID,   ['Main Sheet']),
       fetchNamedTab(PRIYANKA_USER, VANSHIKA_FILE_ID, ['Main Sheet']),
       fetchNamedTab(PRIYANKA_USER, HARNOOR_FILE_ID,  ['Main Sheet']),
       fetchSatyamTab(),                                // May (or first available) Satyam sheet
-      safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange`),
-      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange`),
-      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange`),
-      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('June%20Targets')/usedRange`),
-      safeGet(`${agBase}('TTC')/usedRange`),
-      safeGet(`${agBase}('INK%20REVENUE')/usedRange`),
+      safeGet(`${hmBase}/${SATYAM_FILE_ID}/workbook/worksheets('April%20master%20sheet')/usedRange(valuesOnly=true)`),
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('April%20Targets')/usedRange(valuesOnly=true)`),
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('May%20Targets')/usedRange(valuesOnly=true)`),
+      safeGet(`${hmBase}/${APRIL_PLAN_ID}/workbook/worksheets('June%20Targets')/usedRange(valuesOnly=true)`),
+      safeGet(`${agBase}('TTC')/usedRange(valuesOnly=true)`),
+      safeGet(`${agBase}('INK%20REVENUE')/usedRange(valuesOnly=true)`),
     ]);
 
     // ── Derive target month: prefer June, then May, then April ───────────────
