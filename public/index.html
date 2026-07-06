@@ -577,10 +577,12 @@
           <select id="or-sku-poc" onchange="renderSKUGrid(); renderSKUChart();"
             style="font-size:.8rem;padding:5px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer">
             <option value="">All POCs</option>
-            <option value="Mohit">Mohit</option>
-            <option value="Hardev">Hardev</option>
+            <option value="Renuka">Renuka</option>
             <option value="Satyam">Satyam</option>
-            <option value="Priyanka">Priyanka</option>
+            <option value="Akanksha">Akanksha</option>
+            <option value="Anjali">Anjali</option>
+            <option value="Vanshika">Vanshika</option>
+            <option value="Harnoor">Harnoor</option>
           </select>
         </div>
       </div>
@@ -1191,15 +1193,13 @@ function renderOrderTargets() {
 
   const orderTarget   = monthT.overallOrderTarget  || overall.orderTarget  || 1020;
   const teamTargets   = monthT.teamTargets || RAW.teamTargets || {};
-  const agencyTarget  = teamTargets['Priyanka'] || 0;
-  const inhouseTarget = (teamTargets['Mohit']||0) + (teamTargets['Hardev']||0) + (teamTargets['Satyam']||0);
-
-  const agencyActual  = pocOrders['Priyanka'] || 0;
-  const inhouseActual = (pocOrders['Mohit']||0) + (pocOrders['Hardev']||0) + (pocOrders['Satyam']||0);
-  const totalActual   = agencyActual + inhouseActual;
+  // Current in-house team (Renuka, Satyam, Akanksha, Anjali, Vanshika, Harnoor)
+  // are all in-house — sum whatever targets/orders exist across all of them.
+  const inhouseTarget = Object.values(teamTargets).reduce((s, v) => s + (Number(v) || 0), 0);
+  const inhouseActual = Object.values(pocOrders).reduce((s, v) => s + (Number(v) || 0), 0);
+  const totalActual   = inhouseActual;
 
   const totalPct   = orderTarget   > 0 ? Math.min(Math.round(totalActual  /orderTarget  *100),100) : 0;
-  const agencyPct  = agencyTarget  > 0 ? Math.min(Math.round(agencyActual /agencyTarget *100),100) : 0;
   const inhousePct = inhouseTarget > 0 ? Math.min(Math.round(inhouseActual/inhouseTarget*100),100) : 0;
 
   const label = monthLabelStr(fM || RAW.targetMonth || '');
@@ -1213,12 +1213,6 @@ function renderOrderTargets() {
       <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
       <div class="ot-pct" style="color:#3b82f6">${totalPct}% achieved</div>
       <div class="ot-split">
-        <div class="ot-split-item">
-          <div class="ot-split-label" style="color:#7c3aed">🏢 Agency (Priyanka)</div>
-          <div class="ot-split-num">${agencyActual} <span>/ ${agencyTarget||'—'}</span></div>
-          ${agencyTarget > 0 ? `<div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${agencyPct}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
-          <div class="ot-split-pct" style="color:#7c3aed">${agencyPct}%</div>` : ''}
-        </div>
         <div class="ot-split-item">
           <div class="ot-split-label" style="color:#0d9488">🏠 In-house Team</div>
           <div class="ot-split-num">${inhouseActual} <span>/ ${inhouseTarget||'—'}</span></div>
@@ -1237,7 +1231,7 @@ function renderPOCCards() {
   const pocOrders    = monthT.pocOrders    || RAW.pocOrders    || {};
   const pocSkuOrders = monthT.pocSkuOrders || RAW.pocSkuOrders || {};
   const teamTargets  = monthT.teamTargets  || RAW.teamTargets  || {};
-  const POC_ORDER    = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+  const POC_ORDER    = ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Vanshika', 'Harnoor'];
   const selSku      = (document.getElementById('or-product') || {}).value || '';
 
   // Determine if only the month filter is active (no product/brand/POC filters).
@@ -1270,7 +1264,7 @@ function renderPOCCards() {
     const barColor = isOver
       ? 'background:linear-gradient(90deg,#16a34a,#4ade80)'
       : 'background:linear-gradient(90deg,#3b82f6,#93c5fd)';
-    const roleLabel = name === 'Priyanka' ? 'Agency' : 'In-house';
+    const roleLabel = 'In-house';
     return `<div class="poc-card">
       <div class="poc-avatar">${name.charAt(0)}</div>
       <div class="poc-name">${name}</div>
@@ -1292,8 +1286,8 @@ function renderSKUGrid() {
   const pocSkuOrders = monthT_sku.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
-  const POCS         = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
-  const POC_COLORS   = { Mohit: '#16a34a', Hardev: '#2563eb', Satyam: '#7c3aed', Priyanka: '#ea580c' };
+  const POCS         = ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Vanshika', 'Harnoor'];
+  const POC_COLORS   = { Renuka: '#16a34a', Satyam: '#7c3aed', Akanksha: '#2563eb', Anjali: '#ea580c', Vanshika: '#0891b2', Harnoor: '#db2777' };
 
   // All SKUs across all POCs — filter to selected SKU if one is chosen
   const allSkusRaw = [...new Set(
@@ -1340,7 +1334,7 @@ function renderSKUChart() {
   const pocSkuOrders = RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
-  const POCS         = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+  const POCS         = selPoc ? [selPoc] : ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Vanshika', 'Harnoor'];
 
   // Aggregate total orders per SKU
   const allSkusRaw = [...new Set(Object.values(pocSkuOrders).flatMap(m => Object.keys(m)))].sort();
