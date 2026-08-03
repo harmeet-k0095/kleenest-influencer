@@ -893,6 +893,37 @@ app.get('/api/debug/priyanka-months', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── /api/debug/apify-runs — list recent Apify actor runs (RUNNING by default) ──
+app.get('/api/debug/apify-runs', async (req, res) => {
+  try {
+    const token = process.env.APIFY_TOKEN;
+    if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
+    const status = req.query.status || 'RUNNING';
+    const r = await fetch(`https://api.apify.com/v2/actor-runs?token=${token}&status=${status}&limit=20&desc=true`);
+    const j = await r.json();
+    const runs = (j.data?.items || []).map(x => ({
+      id: x.id, actId: x.actId, status: x.status, startedAt: x.startedAt,
+      durationSecs: x.finishedAt ? null : (Date.now() - new Date(x.startedAt).getTime()) / 1000,
+    }));
+    res.json({ runs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── /api/debug/apify-abort/:runId — abort a specific Apify run ───────────────
+app.post('/api/debug/apify-abort/:runId', async (req, res) => {
+  try {
+    const token = process.env.APIFY_TOKEN;
+    if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
+    const r = await fetch(`https://api.apify.com/v2/actor-runs/${req.params.runId}/abort?token=${token}`, { method: 'POST' });
+    const j = await r.json();
+    res.json({ status: j.data?.status, id: j.data?.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/debug/targets-raw — inspect raw April/May target tab structures ─────
 app.get('/api/debug/targets-raw', async (req, res) => {
   try {
