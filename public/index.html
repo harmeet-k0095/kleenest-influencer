@@ -580,7 +580,8 @@
             <option value="Mohit">Mohit</option>
             <option value="Hardev">Hardev</option>
             <option value="Satyam">Satyam</option>
-            <option value="Priyanka">Priyanka</option>
+            <option value="Akanksha">Akanksha</option>
+            <option value="Renuka">Renuka</option>
           </select>
         </div>
       </div>
@@ -1182,6 +1183,55 @@ function renderLiveTargets() {
         </div>`;
       }).join('')}
     </div>`;
+
+    // ── Owner-wise breakdown ──────────────────────────────────────────────────
+    // Count per POC from LV_FILTERED (in-house rows); fall back to all influencers when unfiltered.
+    const POC_COLORS_LV = { Mohit:'#16a34a', Hardev:'#2563eb', Satyam:'#7c3aed', Akanksha:'#0891b2', Priyanka:'#ea580c', Renuka:'#db2777' };
+    const hasLink = i => { const l = String(i.liveLink||'').trim(); return l.includes('instagram.com')||l.includes('youtube.com')||l.includes('youtu.be'); };
+
+    // When filtered: count from filtered in-house rows. When not filtered: count from all influencers with live link.
+    // RAW.influencers is already in-house only (from Live Inhouse sheet); no category check needed.
+    const ownerSource = filtered
+      ? ihRows.filter(i => selProd ? normCase(i.product) === normCase(selProd) : true)
+      : (RAW.influencers || []).filter(i => hasLink(i));
+
+    const ownerMap = {};
+    ownerSource.forEach(i => {
+      const p = i.poc || 'Unassigned';
+      if (p !== 'Unassigned') ownerMap[p] = (ownerMap[p] || 0) + 1;
+    });
+    const ownerTotal  = Object.values(ownerMap).reduce((s,v)=>s+v, 0);
+    const ownerEntries = Object.entries(ownerMap).sort((a,b) => b[1]-a[1]);
+
+    if (ownerEntries.length > 0) {
+      html += `
+      <div style="margin-top:18px;padding-bottom:6px;border-bottom:2px dashed #bbf7d0;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:.82rem;font-weight:700;color:#15803d;">👤 In-house — Owner-wise Live</span>
+        <span style="font-size:.72rem;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 8px;border-radius:10px;font-weight:600;">${ownerTotal} reels</span>
+      </div>
+      <div class="target-list">
+        ${ownerEntries.map(([poc, cnt]) => {
+          const pct   = ownerTotal > 0 ? Math.round(cnt / ownerTotal * 100) : 0;
+          const color = POC_COLORS_LV[poc] || '#6b7280';
+          const initials = poc.slice(0,1).toUpperCase();
+          return `<div class="target-item">
+            <div class="target-header">
+              <span class="target-name" style="display:flex;align-items:center;gap:7px;">
+                <span style="width:22px;height:22px;border-radius:50%;background:${color}22;border:1.5px solid ${color}66;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;color:${color};">${initials}</span>
+                <span style="font-weight:600;color:#1f2937;">${poc}</span>
+              </span>
+              <span class="target-nums">
+                <span style="font-weight:700;color:${color};">${cnt}</span>
+                <span style="color:#9ca3af;font-weight:400;margin-left:4px;">(${pct}%)</span>
+              </span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}88);"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
   }
 
   document.getElementById('lv-target-list').innerHTML = html;
@@ -1239,8 +1289,7 @@ function renderOrderTargets() {
 
   const orderTarget   = monthT.overallOrderTarget  || overall.orderTarget  || 1020;
   const teamTargets   = monthT.teamTargets || RAW.teamTargets || {};
-  const agencyTarget  = teamTargets['Priyanka'] || 0;
-  const inhouseTarget = (teamTargets['Mohit']||0) + (teamTargets['Hardev']||0) + (teamTargets['Satyam']||0);
+  const inhouseTarget = (teamTargets['Mohit']||0) + (teamTargets['Hardev']||0) + (teamTargets['Satyam']||0) + (teamTargets['Akanksha']||0) + (teamTargets['Renuka']||0);
 
   // When a SKU filter is active, use SKU-specific counts from order sheets
   // so all numbers (KPI, POC cards, targets) are consistent
@@ -1248,15 +1297,13 @@ function renderOrderTargets() {
     ? ((pocSkuOrd[name] || {})[fP_ot] || 0)
     : (pocOrders[name] || 0);
 
-  const agencyActual  = _cnt('Priyanka');
-  const inhouseActual = _cnt('Mohit') + _cnt('Hardev') + _cnt('Satyam');
-  const totalActual   = agencyActual + inhouseActual;
+  const inhouseActual = _cnt('Mohit') + _cnt('Hardev') + _cnt('Satyam') + _cnt('Akanksha') + _cnt('Renuka');
+  const totalActual   = inhouseActual;
 
-  const totalPct   = orderTarget   > 0 ? Math.min(Math.round(totalActual  /orderTarget  *100),100) : 0;
-  const agencyPct  = agencyTarget  > 0 ? Math.min(Math.round(agencyActual /agencyTarget *100),100) : 0;
-  const inhousePct = inhouseTarget > 0 ? Math.min(Math.round(inhouseActual/inhouseTarget*100),100) : 0;
+  const totalPct   = orderTarget   > 0 ? Math.min(Math.round(totalActual   / orderTarget   * 100), 100) : 0;
+  const inhousePct = inhouseTarget > 0 ? Math.min(Math.round(inhouseActual / inhouseTarget * 100), 100) : 0;
 
-  const label   = monthLabelStr(fM || RAW.targetMonth || '');
+  const label    = monthLabelStr(fM || RAW.targetMonth || '');
   const skuLabel = fP_ot ? ` · ${fP_ot}` : '';
 
   const orTargetEl = document.getElementById('or-overall-targets');
@@ -1268,13 +1315,7 @@ function renderOrderTargets() {
       <div class="ot-bar-bg"><div class="ot-bar-fill" style="width:${totalPct}%;background:linear-gradient(90deg,#2563eb,#60a5fa)"></div></div>
       <div class="ot-pct" style="color:#3b82f6">${totalPct}% achieved</div>
       <div class="ot-split">
-        <div class="ot-split-item">
-          <div class="ot-split-label" style="color:#7c3aed">🏢 Agency (Priyanka)</div>
-          <div class="ot-split-num">${agencyActual} <span>/ ${agencyTarget||'—'}</span></div>
-          ${agencyTarget > 0 ? `<div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${agencyPct}%;background:linear-gradient(90deg,#7c3aed,#a78bfa)"></div></div>
-          <div class="ot-split-pct" style="color:#7c3aed">${agencyPct}%</div>` : ''}
-        </div>
-        <div class="ot-split-item">
+        <div class="ot-split-item" style="grid-column:1/-1">
           <div class="ot-split-label" style="color:#0d9488">🏠 In-house Team</div>
           <div class="ot-split-num">${inhouseActual} <span>/ ${inhouseTarget||'—'}</span></div>
           ${inhouseTarget > 0 ? `<div class="ot-split-bar-bg"><div class="ot-split-bar-fill" style="width:${inhousePct}%;background:linear-gradient(90deg,#0d9488,#34d399)"></div></div>
@@ -1292,7 +1333,7 @@ function renderPOCCards() {
   const pocOrders    = monthT.pocOrders    || RAW.pocOrders    || {};
   const pocSkuOrders = monthT.pocSkuOrders || RAW.pocSkuOrders || {};
   const teamTargets  = monthT.teamTargets  || RAW.teamTargets  || {};
-  const POC_ORDER    = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+  const POC_ORDER    = ['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'];
   const selSku      = (document.getElementById('or-product') || {}).value || '';
 
   // Determine if only the month filter is active (no product/brand/POC filters).
@@ -1328,7 +1369,7 @@ function renderPOCCards() {
     const barColor = isOver
       ? 'background:linear-gradient(90deg,#16a34a,#4ade80)'
       : 'background:linear-gradient(90deg,#3b82f6,#93c5fd)';
-    const roleLabel = name === 'Priyanka' ? 'Agency' : 'In-house';
+    const roleLabel = 'In-house';
     return `<div class="poc-card">
       <div class="poc-avatar">${name.charAt(0)}</div>
       <div class="poc-name">${name}</div>
@@ -1350,8 +1391,8 @@ function renderSKUGrid() {
   const pocSkuOrders = monthT_sku.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
-  const POCS         = ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
-  const POC_COLORS   = { Mohit: '#16a34a', Hardev: '#2563eb', Satyam: '#7c3aed', Priyanka: '#ea580c' };
+  const POCS         = ['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'];
+  const POC_COLORS   = { Mohit: '#16a34a', Hardev: '#2563eb', Satyam: '#7c3aed', Akanksha: '#0891b2', Renuka: '#db2777' };
 
   // All SKUs across all POCs — filter to selected SKU if one is chosen
   const allSkusRaw = [...new Set(
@@ -1400,7 +1441,7 @@ function renderSKUChart() {
   const pocSkuOrders = monthT_chart.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
-  const POCS         = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Priyanka'];
+  const POCS         = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'];
 
   // Aggregate total orders per SKU
   const allSkusRaw = [...new Set(Object.values(pocSkuOrders).flatMap(m => Object.keys(m)))].sort();
@@ -2086,9 +2127,9 @@ async function runBatchUpdate() {
       if (data.status === 'FAILED' || data.status === 'ABORTED') throw new Error(`Apify run ${data.status}`);
     }
     if (!items) throw new Error('Apify timed out');
-    addLog(`✅ Scraped ${items.length} posts. Writing to sheet…`);
+    addLog(`✅ Scraped ${items.length} posts. Matching to sheet rows…`);
 
-    // 4. Match items to rows
+    // 4. Match items to rows by shortcode
     function scFromUrl(url) {
       const m = String(url || '').match(/instagram\.com\/(?:p|reels?|tv)\/([A-Za-z0-9_-]+)/);
       return m ? m[1] : null;
@@ -2102,7 +2143,6 @@ async function runBatchUpdate() {
     const updates = rows.map(r => {
       const sc = scFromUrl(r.url);
       const m  = sc ? metricsMap[sc] : null;
-      // IMPORTANT: include fileId + sheetName so write-sheet targets the correct sheet
       return m ? {
         excelRow: r.excelRow, viewsCol: r.viewsCol, likesCol: r.likesCol, commentsCol: r.commentsCol,
         fileId: r.fileId, sheetName: r.sheetName,
@@ -2110,15 +2150,20 @@ async function runBatchUpdate() {
       } : null;
     }).filter(Boolean);
 
-    // 5. Write to sheet
+    const noMatch = rows.length - updates.length;
+    addLog(`Matched ${updates.length}/${rows.length} rows (${noMatch} unmatched — private/deleted posts or profile URLs). Writing to sheet…`);
+
+    // 5. Write to sheet — uses Graph $batch to avoid timeout
     const writeRes  = await fetch('/api/metrics/write-sheet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
     });
-    const writeData = await writeRes.json();
+    let writeData;
+    try { writeData = await writeRes.json(); }
+    catch { throw new Error(`Sheet write failed — server returned non-JSON (likely a timeout). Try a smaller batch.`); }
     addLog(`✅ Written to sheet: ${writeData.written} rows updated.`, 'ok');
-    if (writeData.errors?.length) addLog(`⚠ ${writeData.errors.length} write errors`, 'err');
+    if (writeData.errors?.length) addLog(`⚠ ${writeData.errors.length} rows had write errors`, 'err');
 
     // 6. Refresh empty count
     await loadEmptyRowCount();

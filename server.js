@@ -20,6 +20,9 @@ const LIVE_FILE_ID    = process.env.LIVE_FILE_ID    || '01I5S75AMRWCD7BATFKZD3S2
 const AGENCY_FILE_ID  = process.env.AGENCY_FILE_ID  || '01I5S75AMCVHK6UM4PXJHYMWSJNEFVJZYY';
 // Priyanka's dedicated order sheet (Tile & Floor Cleaner orders)
 const PRIYANKA_TFC_ID = process.env.PRIYANKA_TFC_ID || '01I5S75AIEWB4M6G7HNJFYN6AIPX5OROKD';
+// Renuka + Akanksha order sheets (also on priyanka's drive)
+const RENUKA_FILE_ID   = process.env.RENUKA_FILE_ID   || '01I5S75AJ6DOVLAKUZIRG3STTXLGGDN7GY';
+const AKANKSHA_FILE_ID = process.env.AKANKSHA_FILE_ID || '01I5S75AIMJRESI5E5RFBYHS4GTKQIKE7A';
 
 // Individual order sheets (harmeet's drive)
 const HARMEET_USER   = process.env.HARMEET_USER   || 'harmeet@kleenest.in';
@@ -82,7 +85,8 @@ function normProduct(p) { return normAgencyProduct(p); }
 function normPOC(p) {
   if (!p) return 'Unassigned';
   const m = { hardev: 'Hardev', 'hardev gill': 'Hardev', sattyam: 'Satyam', satyam: 'Satyam',
-               priyanka: 'Priyanka', mohit: 'Mohit' };
+               priyanka: 'Priyanka', mohit: 'Mohit', akanksha: 'Akanksha', akanskha: 'Akanksha',
+               renuka: 'Renuka' };
   return m[p.trim().toLowerCase()] || p.trim();
 }
 
@@ -304,11 +308,21 @@ function countOrdersBySkuFromSheet(values, statusValues, targetYM) {
 // Row 3=In-house, Row 4=TTC, Row 5=Ink Revenue; col 1 = overall total
 const parseTargetTabOverall = values => {
   if (!values || values.length < 4) return null;
-  const inhouseReelTarget = Number((values[3] || [])[1]) || 0;
-  const agencyTtcTarget   = Number((values[4] || [])[1]) || 0;
-  const agencyInkTarget   = Number((values[5] || [])[1]) || 0;
-  const agencyReelTarget  = agencyTtcTarget + agencyInkTarget;
-  const totalReelTarget   = inhouseReelTarget + agencyReelTarget;
+  let inhouseReelTarget = 0, agencyTtcTarget = 0, agencyInkTarget = 0;
+  for (const row of values) {
+    const label = String(row[0] || '').trim().toLowerCase();
+    const val   = Number(row[1]) || 0;
+    if (!label || !val) continue;
+    if (label.includes('in-house') && (label.includes('go-live') || label.includes('golive') || label.includes('reel'))) {
+      inhouseReelTarget = val;
+    } else if (label.includes('ttc') || label.includes('tile') || label.includes('floor')) {
+      agencyTtcTarget = val;
+    } else if (label.includes('ink') || label.includes('revenue agency')) {
+      agencyInkTarget = val;
+    }
+  }
+  const agencyReelTarget = agencyTtcTarget + agencyInkTarget;
+  const totalReelTarget  = inhouseReelTarget + agencyReelTarget;
   if (!inhouseReelTarget && !agencyReelTarget) return null;
   return { inhouseReelTarget, agencyTtcTarget, agencyInkTarget, agencyReelTarget, totalReelTarget };
 };
@@ -357,7 +371,7 @@ function parseTargetTabOrders(tabValues) {
     if (inSection) {
       const name = normPOC(label);
       const num  = Number(row[1]);
-      if (['Mohit', 'Hardev', 'Satyam', 'Priyanka'].includes(name) && num > 0) teamTargets[name] = num;
+      if (['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'].includes(name) && num > 0) teamTargets[name] = num;
     }
   });
 
@@ -636,6 +650,30 @@ app.get('/api/debug/raw-headers', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── /api/debug/live-dates — show date formats + views values in live sheet ────
+app.get('/api/debug/live-dates', async (req, res) => {
+  try {
+    const prBase = `/users/${PRIYANKA_USER}/drive/items/${LIVE_FILE_ID}/workbook/worksheets`;
+    const r = await graphGet(`${prBase}('Live%20Inhouse')/usedRange`);
+    const values = r.values || [];
+    if (values.length < 2) return res.json({ error: 'No data' });
+    const headers  = values[0];
+    const colInc   = kw => headers.findIndex(h => String(h).trim().toUpperCase().includes(kw.toUpperCase()));
+    const col      = kw => headers.findIndex(h => String(h).trim().toUpperCase() === kw.toUpperCase());
+    const dateIdx  = colInc('LIVE DATE');
+    const viewsIdx = col('VIEWS');
+    const linkIdx  = colInc('LIVE LINK');
+    const sample   = values.slice(1, 20).map((row, i) => ({
+      excelRow: i + 2,
+      dateRaw:  row[dateIdx],
+      dateType: typeof row[dateIdx],
+      viewsRaw: row[viewsIdx],
+      linkRaw:  String(row[linkIdx] || '').slice(0, 60),
+    }));
+    res.json({ dateIdx, viewsIdx, linkIdx, headers, sample });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── /api/debug/mohit — inspect Mohit's sheet headers + sample rows ───────────
@@ -943,17 +981,32 @@ app.get('/api/dashboard', async (req, res) => {
       const aprSheet = (satyamAprilRaw.values || []).length > 1 ? satyamAprilRaw.values : null;
       return ym === `${_year}-04` && aprSheet ? aprSheet : satyamRaw.values;
     };
+    // Renuka + Akanksha sheets live on Priyanka's drive (not Harmeet's)
+    const priyDriveBase = `/users/${PRIYANKA_USER}/drive/items`;
+    const fetchPriyTab = async (fileId, sheetNames) => {
+      for (const name of sheetNames) {
+        const r = await safeGet(`${priyDriveBase}/${fileId}/workbook/worksheets('${encodeURIComponent(name)}')/usedRange`);
+        if (r.values && r.values.length > 1) return r;
+      }
+      return { values: [] };
+    };
+    const [akankshaRaw, renukaRaw] = await Promise.all([
+      fetchPriyTab(AKANKSHA_FILE_ID, ['Main Sheet ', 'Main Sheet', 'Main sheet ', 'Main sheet']),
+      fetchPriyTab(RENUKA_FILE_ID,   ['Main sheet ', 'Main sheet', 'Main Sheet ', 'Main Sheet']),
+    ]);
     const _pocOrdersFor = ym => ({
       Mohit:    countOrdersFromSheet(mohitRaw.values,       ORDER_STATUSES, ym),
       Hardev:   countOrdersFromSheet(hardevRaw.values,      ORDER_STATUSES, ym),
       Satyam:   countOrdersFromSheet(_satyamFor(ym),        ORDER_STATUSES, ym),
-      Priyanka: countOrdersFromSheet(priyankaTfcRaw.values, ORDER_STATUSES, ym),
+      Akanksha: countOrdersFromSheet(akankshaRaw.values,    ORDER_STATUSES, ym),
+      Renuka:   countOrdersFromSheet(renukaRaw.values,      ORDER_STATUSES, ym),
     });
     const _pocSkuOrdersFor = ym => ({
-      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,       ORDER_STATUSES, ym),
-      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values,      ORDER_STATUSES, ym),
-      Satyam:   countOrdersBySkuFromSheet(_satyamFor(ym),        ORDER_STATUSES, ym),
-      Priyanka: countOrdersBySkuFromSheet(priyankaTfcRaw.values, ORDER_STATUSES, ym),
+      Mohit:    countOrdersBySkuFromSheet(mohitRaw.values,    ORDER_STATUSES, ym),
+      Hardev:   countOrdersBySkuFromSheet(hardevRaw.values,   ORDER_STATUSES, ym),
+      Satyam:   countOrdersBySkuFromSheet(_satyamFor(ym),     ORDER_STATUSES, ym),
+      Akanksha: countOrdersBySkuFromSheet(akankshaRaw.values, ORDER_STATUSES, ym),
+      Renuka:   countOrdersBySkuFromSheet(renukaRaw.values,   ORDER_STATUSES, ym),
     });
 
     // Orders for the active target month (used in server KPIs)
@@ -1297,6 +1350,9 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
     const viewsCol    = colLetter(idx.views);
     const likesCol    = colLetter(idx.likes);
     const commentsCol = colLetter(idx.comments);
+    const viewsIdx    = idx.views;
+    const likesIdx    = idx.likes;
+    const commentsIdx = idx.comments;
 
     for (let i = 1; i < values.length; i++) {
       const row  = values[i];
@@ -1311,9 +1367,22 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
       // Month filter — skip rows whose live date doesn't match selected month
       if (monthFilter && idx.liveDate >= 0) {
         const dateVal = row[idx.liveDate];
+        let rowYM = null;
+        // Try Excel serial number first
         const d = excelSerialToDate(dateVal);
-        if (!d) continue; // no date — skip when month filter is active
-        const rowYM = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        if (d) {
+          rowYM = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        } else if (dateVal) {
+          // Fallback: parse text dates like "01/05/2026", "1-5-2026", "2026-05-01"
+          const s = String(dateVal).trim();
+          // ISO format YYYY-MM-DD
+          const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+          // DD/MM/YYYY or DD-MM-YYYY
+          const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (iso)      rowYM = `${iso[1]}-${iso[2].padStart(2,'0')}`;
+          else if (dmy) rowYM = `${dmy[3]}-${dmy[2].padStart(2,'0')}`;
+        }
+        if (!rowYM) continue;       // no parseable date → skip
         if (rowYM !== monthFilter) continue;
       }
 
@@ -1324,9 +1393,22 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
           username:  String(row[idx.username] || '').trim(),
           url:       link.split('?')[0].replace(/\/$/, ''),
           viewsCol, likesCol, commentsCol,
+          viewsIdx, likesIdx, commentsIdx,
           fileId, sheetName,
         });
       }
+    }
+  }
+
+  // Try all known in-house tab names (the tab keeps getting renamed)
+  const LIVE_TAB_NAMES = ['Live Inhouse', 'Live In-house', 'Live I', 'Live Sheet', 'Sheet1', 'Sheet2', 'SHeet 2'];
+  async function scanLiveSheet(out, totalRef) {
+    for (const name of LIVE_TAB_NAMES) {
+      const prev = out.length;
+      const prevCount = totalRef.count;
+      await scanSheet(LIVE_FILE_ID, name, out, totalRef);
+      // If scanSheet added anything (rows or count), this is the live tab — stop
+      if (out.length > prev || totalRef.count > prevCount) return;
     }
   }
 
@@ -1335,7 +1417,7 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
     const inTotal = { count: 0 };
     const agTotal = { count: 0 };
 
-    if (type !== 'agency') await scanSheet(LIVE_FILE_ID,   'Live Inhouse', rows, inTotal);
+    if (type !== 'agency') await scanLiveSheet(rows, inTotal);
     if (type !== 'inhouse') {
       await scanSheet(AGENCY_FILE_ID, 'TTC',         rows, agTotal);
       await scanSheet(AGENCY_FILE_ID, 'INK REVENUE', rows, agTotal);
@@ -1353,32 +1435,96 @@ app.get('/api/metrics/empty-rows', async (req, res) => {
 });
 
 // ── POST /api/metrics/write-sheet — write scraped metrics to Excel cells ───────
-// Body: { updates: [{ excelRow, views, likes, comments, viewsCol, likesCol, commentsCol, fileId, sheetName }] }
-// fileId / sheetName default to LIVE_FILE_ID / 'Live Inhouse' for backward compat
+// Body: { updates: [{ excelRow, views, likes, comments, viewsCol, likesCol, commentsCol, viewsIdx, likesIdx, commentsIdx, fileId, sheetName }] }
+// Strategy: 1 PATCH per ROW (range covering views…comments columns) → ~5 batch calls for 100 rows vs 15 before.
 app.post('/api/metrics/write-sheet', async (req, res) => {
   const { updates } = req.body || {};
   if (!Array.isArray(updates) || !updates.length) return res.json({ written: 0 });
 
-  let written = 0;
-  const errors = [];
+  const token = await getToken();
+
+  // Helper: convert column letter(s) back to 1-based index for range ordering
+  const colIdx = letter => {
+    let n = 0;
+    for (const c of String(letter).toUpperCase()) n = n * 26 + (c.charCodeAt(0) - 64);
+    return n;
+  };
+
+  // Build ONE request per row covering [views, likes, comments] as a contiguous range.
+  // We sort the 3 columns left→right, build values array filling any gaps with null.
+  const rowRequests = [];
   for (const u of updates) {
     const {
       excelRow, views, likes, comments,
       viewsCol, likesCol, commentsCol,
+      viewsIdx, likesIdx, commentsIdx,
       fileId    = LIVE_FILE_ID,
       sheetName = 'Live Inhouse',
     } = u;
     const enc  = encodeURIComponent(sheetName);
     const base = `/users/${PRIYANKA_USER}/drive/items/${fileId}/workbook/worksheets`;
+
+    // Sort cols left→right so we build a proper contiguous range
+    const cols = [
+      { col: viewsCol,    idx: viewsIdx    ?? colIdx(viewsCol)    - 1, val: views    },
+      { col: likesCol,    idx: likesIdx    ?? colIdx(likesCol)    - 1, val: likes    },
+      { col: commentsCol, idx: commentsIdx ?? colIdx(commentsCol) - 1, val: comments },
+    ].sort((a, b) => a.idx - b.idx);
+
+    const startCol = cols[0].col;
+    const endCol   = cols[cols.length - 1].col;
+    const startIdx = cols[0].idx;
+    const endIdx   = cols[cols.length - 1].idx;
+
+    // Build values row: fill with null for any skipped columns between start and end
+    const rowValues = Array(endIdx - startIdx + 1).fill(null);
+    cols.forEach(c => { rowValues[c.idx - startIdx] = c.val; });
+
+    rowRequests.push({
+      rowKey: excelRow,
+      url:    `${base}('${enc}')/range(address='${startCol}${excelRow}:${endCol}${excelRow}')`,
+      values: [rowValues],
+    });
+  }
+
+  // Fire in $batch groups of 20 rows per HTTP call (1 request per row = ~5 calls for 100 rows)
+  const BATCH_SIZE = 20;
+  const failedRows = new Set();
+  const okRows     = new Set();
+
+  for (let i = 0; i < rowRequests.length; i += BATCH_SIZE) {
+    const chunk = rowRequests.slice(i, i + BATCH_SIZE);
+    const batchBody = {
+      requests: chunk.map((c, j) => ({
+        id:      String(j),
+        method:  'PATCH',
+        url:     c.url,
+        headers: { 'Content-Type': 'application/json' },
+        body:    { values: c.values },
+      })),
+    };
     try {
-      await graphPatch(`${base}('${enc}')/range(address='${viewsCol}${excelRow}')`,    { values: [[views]]    });
-      await graphPatch(`${base}('${enc}')/range(address='${likesCol}${excelRow}')`,    { values: [[likes]]    });
-      await graphPatch(`${base}('${enc}')/range(address='${commentsCol}${excelRow}')`, { values: [[comments]] });
-      written++;
-    } catch (err) {
-      errors.push({ excelRow, sheetName, error: err.message });
+      const batchRes  = await fetch('https://graph.microsoft.com/v1.0/$batch', {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(batchBody),
+      });
+      const text = await batchRes.text();
+      let batchData;
+      try { batchData = JSON.parse(text); } catch { batchData = { responses: [] }; }
+      chunk.forEach((c, j) => {
+        const resp = (batchData.responses || []).find(r => r.id === String(j));
+        if (resp && resp.status >= 200 && resp.status < 300) okRows.add(c.rowKey);
+        else failedRows.add(c.rowKey);
+      });
+    } catch {
+      chunk.forEach(c => failedRows.add(c.rowKey));
     }
   }
+
+  // A row is "written" only if it succeeded and never failed
+  const written = [...okRows].filter(r => !failedRows.has(r)).length;
+  const errors  = [...failedRows].map(r => ({ excelRow: r }));
   res.json({ written, errors });
 });
 
@@ -1393,26 +1539,30 @@ app.post('/api/metrics/start', async (req, res) => {
   if (!token) return res.status(500).json({ error: 'APIFY_TOKEN not configured' });
 
   // Validate, sanitise, and deduplicate URLs before sending to Apify.
-  // Apify rejects: non-Instagram URLs, bare domain, and any duplicate entries.
+  // Apify requires each URL to match exactly:
+  //   ^(https:\/\/)?(www\.)?instagram\.com\/[A-Za-z0-9._-]+(\/.*)?$
+  // It also rejects duplicate entries.
+  const APIFY_IG_RE = /^(https?:\/\/)?(www\.)?instagram\.com\/[A-Za-z0-9._-]+(\/.*)?$/;
   const seen = new Set();
   const validUrls = [];
+  const skippedLog = [];
   for (const u of urls) {
-    const s = String(u || '').trim();
-    if (!s.includes('instagram.com')) continue;
-    const path = s.replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '').split('?')[0].trim();
-    if (path.length < 3) continue;
-    // Normalise: strip trailing slash + query string for dedup key
-    const key = s.split('?')[0].replace(/\/$/, '').toLowerCase();
+    const s = String(u || '').trim().split('?')[0].replace(/\/$/, ''); // strip query + trailing slash
+    if (!s) continue;
+    // Normalise to https://www.instagram.com/... so Apify regex always matches
+    const normalised = s.replace(/^https?:\/\/(www\.)?instagram\.com/, 'https://www.instagram.com');
+    if (!APIFY_IG_RE.test(normalised)) { skippedLog.push(s); continue; }
+    const key = normalised.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    validUrls.push(s);
+    validUrls.push(normalised);
   }
-  console.log(`[Apify start] ${validUrls.length} valid+deduped / ${urls.length} total URLs. First 5:`, validUrls.slice(0, 5));
+  console.log(`[Apify start] ${validUrls.length} valid+deduped / ${urls.length} total URLs. Skipped:`, skippedLog.slice(0, 5));
   if (validUrls.length === 0) return res.json({ runId: null, skipped: urls.length });
 
   try {
     const r = await fetch(
-      `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${token}&memory=1024`,
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${token}&memory=2048`,
       {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1420,6 +1570,7 @@ app.post('/api/metrics/start', async (req, res) => {
           directUrls:   validUrls,
           resultsType:  'posts',
           resultsLimit: validUrls.length,
+          maxItems:     validUrls.length,
         }),
       }
     );
@@ -1477,7 +1628,7 @@ app.get('/api/metrics/result/:runId', async (req, res) => {
 });
 
 // ── Start server locally; export for Vercel serverless ───────────────────────
-if (require.main === module) {
+if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => console.log(`Kleenest Dashboard running on http://localhost:${PORT}`));
 }
