@@ -798,6 +798,70 @@ app.get('/api/debug/priyanka-months', async (req, res) => {
 });
 
 // ── /api/debug/targets-raw — inspect raw April/May target tab structures ─────
+// ── TEMP debug endpoints for July target sheet updates ───────────────────────
+app.get('/api/debug/peek-any', async (req, res) => {
+  try {
+    const { driveId, itemId, sheet } = req.query;
+    if (!driveId || !itemId || !sheet) return res.status(400).json({ error: 'pass ?driveId=&itemId=&sheet=' });
+    const enc = encodeURIComponent(sheet);
+    const raw = await graphGet(`/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/usedRange(valuesOnly=true)?$select=address,values`);
+    res.json({ values: raw.values || [], address: raw.address, error: raw.error });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/debug/resolve-any', async (req, res) => {
+  try {
+    const shareUrl = req.query.url;
+    if (!shareUrl) return res.status(400).json({ error: 'pass ?url=' });
+    const encoded = 'u!' + Buffer.from(shareUrl).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const item = await graphGet(`/shares/${encoded}/driveItem`);
+    let tabs = null;
+    const driveId = item.parentReference?.driveId;
+    if (driveId) {
+      const sheets = await graphGet(`/drives/${driveId}/items/${item.id}/workbook/worksheets`).catch(e => ({ error: e.message }));
+      tabs = sheets.value ? sheets.value.map(s => s.name) : sheets;
+    }
+    res.json({ id: item.id, name: item.name, driveId, webUrl: item.webUrl, error: item.error, tabs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/debug/patch-any', async (req, res) => {
+  try {
+    const { driveId, itemId, sheet, address, values } = req.body || {};
+    if (!driveId || !itemId || !sheet || !address || !values) {
+      return res.status(400).json({ error: 'pass driveId, itemId, sheet, address, values' });
+    }
+    const enc = encodeURIComponent(sheet);
+    const token = await getToken();
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/range(address='${address}')`,
+      { method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ values }) }
+    );
+    res.json({ result: await r.json() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/debug/add-sheet-any', async (req, res) => {
+  try {
+    const { driveId, itemId, name } = req.body || {};
+    if (!driveId || !itemId || !name) return res.status(400).json({ error: 'pass driveId, itemId, name' });
+    const token = await getToken();
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets/add`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }
+    );
+    res.json(await r.json());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/debug/targets-raw', async (req, res) => {
   try {
     const hmBase = `/users/${HARMEET_USER}/drive/items`;
