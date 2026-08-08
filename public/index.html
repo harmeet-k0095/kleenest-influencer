@@ -577,11 +577,12 @@
           <select id="or-sku-poc" onchange="renderSKUGrid(); renderSKUChart();"
             style="font-size:.8rem;padding:5px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer">
             <option value="">All POCs</option>
-            <option value="Mohit">Mohit</option>
-            <option value="Hardev">Hardev</option>
+            <option value="Renuka">Renuka</option>
             <option value="Satyam">Satyam</option>
             <option value="Akanksha">Akanksha</option>
-            <option value="Renuka">Renuka</option>
+            <option value="Anjali">Anjali</option>
+            <option value="Harnoor">Harnoor</option>
+            <option value="Priyanka">Priyanka</option>
           </select>
         </div>
       </div>
@@ -1186,7 +1187,7 @@ function renderLiveTargets() {
 
     // ── Owner-wise breakdown ──────────────────────────────────────────────────
     // Count per POC from LV_FILTERED (in-house rows); fall back to all influencers when unfiltered.
-    const POC_COLORS_LV = { Mohit:'#16a34a', Hardev:'#2563eb', Satyam:'#7c3aed', Akanksha:'#0891b2', Priyanka:'#ea580c', Renuka:'#db2777' };
+    const POC_COLORS_LV = { Renuka:'#16a34a', Satyam:'#7c3aed', Akanksha:'#0891b2', Anjali:'#ea580c', Harnoor:'#db2777', Priyanka:'#2563eb' };
     const hasLink = i => { const l = String(i.liveLink||'').trim(); return l.includes('instagram.com')||l.includes('youtube.com')||l.includes('youtu.be'); };
 
     // When filtered: count from filtered in-house rows. When not filtered: count from all influencers with live link.
@@ -1289,7 +1290,7 @@ function renderOrderTargets() {
 
   const orderTarget   = monthT.overallOrderTarget  || overall.orderTarget  || 1020;
   const teamTargets   = monthT.teamTargets || RAW.teamTargets || {};
-  const inhouseTarget = (teamTargets['Mohit']||0) + (teamTargets['Hardev']||0) + (teamTargets['Satyam']||0) + (teamTargets['Akanksha']||0) + (teamTargets['Renuka']||0);
+  const inhouseTarget = (teamTargets['Renuka']||0) + (teamTargets['Satyam']||0) + (teamTargets['Akanksha']||0) + (teamTargets['Anjali']||0) + (teamTargets['Harnoor']||0) + (teamTargets['Priyanka']||0);
 
   // When a SKU filter is active, use SKU-specific counts from order sheets
   // so all numbers (KPI, POC cards, targets) are consistent
@@ -1297,7 +1298,7 @@ function renderOrderTargets() {
     ? ((pocSkuOrd[name] || {})[fP_ot] || 0)
     : (pocOrders[name] || 0);
 
-  const inhouseActual = _cnt('Mohit') + _cnt('Hardev') + _cnt('Satyam') + _cnt('Akanksha') + _cnt('Renuka');
+  const inhouseActual = _cnt('Renuka') + _cnt('Satyam') + _cnt('Akanksha') + _cnt('Anjali') + _cnt('Harnoor') + _cnt('Priyanka');
   const totalActual   = inhouseActual;
 
   const totalPct   = orderTarget   > 0 ? Math.min(Math.round(totalActual   / orderTarget   * 100), 100) : 0;
@@ -1333,7 +1334,7 @@ function renderPOCCards() {
   const pocOrders    = monthT.pocOrders    || RAW.pocOrders    || {};
   const pocSkuOrders = monthT.pocSkuOrders || RAW.pocSkuOrders || {};
   const teamTargets  = monthT.teamTargets  || RAW.teamTargets  || {};
-  const POC_ORDER    = ['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'];
+  const POC_ORDER    = ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Harnoor', 'Priyanka'];
   const selSku      = (document.getElementById('or-product') || {}).value || '';
 
   // Determine if only the month filter is active (no product/brand/POC filters).
@@ -1391,8 +1392,8 @@ function renderSKUGrid() {
   const pocSkuOrders = monthT_sku.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
-  const POCS         = ['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'];
-  const POC_COLORS   = { Mohit: '#16a34a', Hardev: '#2563eb', Satyam: '#7c3aed', Akanksha: '#0891b2', Renuka: '#db2777' };
+  const POCS         = ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Harnoor', 'Priyanka'];
+  const POC_COLORS   = { Renuka: '#16a34a', Satyam: '#7c3aed', Akanksha: '#0891b2', Anjali: '#ea580c', Harnoor: '#db2777', Priyanka: '#2563eb' };
 
   // All SKUs across all POCs — filter to selected SKU if one is chosen
   const allSkusRaw = [...new Set(
@@ -1441,7 +1442,7 @@ function renderSKUChart() {
   const pocSkuOrders = monthT_chart.pocSkuOrders || RAW.pocSkuOrders || {};
   const selPoc       = (document.getElementById('or-sku-poc') || {}).value || '';
   const selSku       = (document.getElementById('or-product') || {}).value || '';
-  const POCS         = selPoc ? [selPoc] : ['Mohit', 'Hardev', 'Satyam', 'Akanksha', 'Renuka'];
+  const POCS         = selPoc ? [selPoc] : ['Renuka', 'Satyam', 'Akanksha', 'Anjali', 'Harnoor', 'Priyanka'];
 
   // Aggregate total orders per SKU
   const allSkusRaw = [...new Set(Object.values(pocSkuOrders).flatMap(m => Object.keys(m)))].sort();

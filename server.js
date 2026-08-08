@@ -23,6 +23,10 @@ const PRIYANKA_TFC_ID = process.env.PRIYANKA_TFC_ID || '01I5S75AIEWB4M6G7HNJFYN6
 // Renuka + Akanksha order sheets (also on priyanka's drive)
 const RENUKA_FILE_ID   = process.env.RENUKA_FILE_ID   || '01I5S75AJ6DOVLAKUZIRG3STTXLGGDN7GY';
 const AKANKSHA_FILE_ID = process.env.AKANKSHA_FILE_ID || '01I5S75AIMJRESI5E5RFBYHS4GTKQIKE7A';
+// Anjali + Harnoor + Priyanka's own order sheet (also on priyanka's drive)
+const ANJALI_FILE_ID   = process.env.ANJALI_FILE_ID   || '01I5S75AJUPGZ775MBEJC27CB3LRFUM4HJ';
+const HARNOOR_FILE_ID  = process.env.HARNOOR_FILE_ID  || '01I5S75AK5QPOT2REYKJHJRKDJWMJGSXHN';
+const PRIYANKA_IS_ID   = process.env.PRIYANKA_IS_ID   || '01I5S75AO2FDATTJWXTRCZHBWVMIK5NIEZ';
 
 // Individual order sheets (harmeet's drive)
 const HARMEET_USER   = process.env.HARMEET_USER   || 'harmeet@kleenest.in';
@@ -86,7 +90,7 @@ function normPOC(p) {
   if (!p) return 'Unassigned';
   const m = { hardev: 'Hardev', 'hardev gill': 'Hardev', sattyam: 'Satyam', satyam: 'Satyam',
                priyanka: 'Priyanka', mohit: 'Mohit', akanksha: 'Akanksha', akanskha: 'Akanksha',
-               renuka: 'Renuka' };
+               renuka: 'Renuka', anjali: 'Anjali', harnoor: 'Harnoor' };
   return m[p.trim().toLowerCase()] || p.trim();
 }
 
@@ -922,6 +926,41 @@ app.get('/api/debug/targets-raw', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── July roster: read each person's own "July Order" row directly ────────────
+// Reading a small pre-computed row (instead of re-scanning each person's full
+// Main Sheet on every dashboard load) is deliberate: those Main Sheets are
+// large enough that full-sheet reads have hit Graph API's RangeExceedsLimit
+// and throttling errors. This is fast and reliable in comparison.
+const SKU_LABELS = { me: 'Magic Eraser', dp: 'Descale Powder', kc: 'Kitchen Cleaner',
+  dt: 'Descale Tablet', tcbc: 'Kleenest TC+BC Kit', tf: 'Tile And Floor',
+  klenzmo: 'Klenzmo Bathroom Kit', copper: 'Copper & Brass' };
+const JULY_ROSTER = [
+  { name: 'Anjali',   fileId: ANJALI_FILE_ID,   user: PRIYANKA_USER, sheet: 'Target ',     range: 'A10:I10', cols: { me:1,dp:2,kc:3,dt:4,tcbc:5,tf:6,total:7,target:8 } },
+  { name: 'Akanksha', fileId: AKANKSHA_FILE_ID, user: PRIYANKA_USER, sheet: 'Target',      range: 'C11:L11', cols: { me:1,dp:2,kc:3,dt:4,tcbc:5,tf:6,klenzmo:7,copper:8,target:9 } },
+  { name: 'Satyam',   fileId: SATYAM_FILE_ID,   user: HARMEET_USER,  sheet: 'Target',      range: 'A3:I3',   cols: { me:1,dp:2,kc:3,dt:4,tcbc:5,tf:6,total:7,target:8 } },
+  { name: 'Renuka',   fileId: RENUKA_FILE_ID,   user: PRIYANKA_USER, sheet: 'june Target', range: 'E11:O11', cols: { me:1,dp:2,kc:3,dt:4,tcbc:5,tf:6,klenzmo:7,target:8,copper:9 } },
+  { name: 'Priyanka', fileId: PRIYANKA_IS_ID,   user: PRIYANKA_USER, sheet: 'Target',      range: 'A3:I3',   cols: { me:1,dp:2,kc:3,dt:4,tcbc:5,tf:6,total:7,target:8 } },
+  { name: 'Harnoor',  fileId: HARNOOR_FILE_ID,  user: PRIYANKA_USER, sheet: 'Target ',     range: 'A9:I9',   cols: { me:1,dp:2,kc:3,dt:4,tcbc:5,tf:6,total:7,target:8 } },
+];
+async function fetchJulyPersonRow(person) {
+  const enc = encodeURIComponent(person.sheet);
+  const rangeEnc = encodeURIComponent(person.range);
+  const path = `/users/${person.user}/drive/items/${person.fileId}/workbook/worksheets('${enc}')/range(address='${rangeEnc}')?$select=values`;
+  const r = await graphGet(path).catch(() => ({}));
+  const row = (r.values && r.values[0]) || [];
+  const c = person.cols;
+  const skuMap = {};
+  Object.entries(SKU_LABELS).forEach(([k, label]) => {
+    if (c[k] != null) {
+      const v = Number(row[c[k]]) || 0;
+      if (v) skuMap[label] = v;
+    }
+  });
+  const total  = c.total  != null ? (Number(row[c.total])  || 0) : Object.values(skuMap).reduce((s, v) => s + v, 0);
+  const target = c.target != null ? (Number(row[c.target]) || 0) : 0;
+  return { total, skuMap, target };
+}
+
 // ── /api/dashboard ───────────────────────────────────────────────────────────
 app.get('/api/dashboard', async (req, res) => {
   try {
@@ -983,7 +1022,10 @@ app.get('/api/dashboard', async (req, res) => {
     const targetTabRaw   = mayHasData ? mayTargetRaw : aprilHasData ? aprilTargetRaw : { values: [] };
     const _monthName     = _targetTabName.replace(' Targets', '').trim();
     const _monthNum      = MONTH_NUMS[_monthName];
-    const targetMonth    = _monthNum ? `${new Date().getFullYear()}-${_monthNum}` : null;
+    // July is the current active month (current team roster), overriding the
+    // April/May-Targets-tab-derived value above, which is now only used for
+    // historical browsing of those two months via monthlyTargets.
+    const targetMonth    = `${new Date().getFullYear()}-07`;
 
     // ── Parse Live Sheet ─────────────────────────────────────────────────────
     const mainValues = liveRaw.values || [];
@@ -1078,12 +1120,11 @@ app.get('/api/dashboard', async (req, res) => {
     const _aprReel   = parseTargetTabOverall(aprilTargetRaw.values);
     const _mayReel   = parseTargetTabOverall(mayTargetRaw.values);
 
-    // Active-month targets (drives server-side KPIs)
+    // Active-month targets (drives server-side KPIs). teamTargets/pocOrders
+    // are set further below from the July roster — this only supplies
+    // orderTargets (per-SKU targets), which July doesn't track separately.
     const _activeOrders  = mayHasData ? _mayOrders : aprilHasData ? _aprOrders : { skuOrderTargets:{}, teamTargets:{}, inhouseOrderTarget:0, overallOrderTarget:0 };
     const orderTargets   = _activeOrders.skuOrderTargets;
-    const teamTargets    = Object.keys(_activeOrders.teamTargets).length
-      ? _activeOrders.teamTargets
-      : { Mohit: 300, Satyam: 200, Hardev: 200, Priyanka: 100 };
 
     // ── Helper: build pocOrders + pocSkuOrders for a given month ────────────
     const ORDER_STATUSES = ['order place', 'order placed', 'live'];
@@ -1120,9 +1161,22 @@ app.get('/api/dashboard', async (req, res) => {
       Renuka:   countOrdersBySkuFromSheet(renukaRaw.values,   ORDER_STATUSES, ym),
     });
 
-    // Orders for the active target month (used in server KPIs)
-    const pocOrders    = _pocOrdersFor(targetMonth);
-    const pocSkuOrders = _pocSkuOrdersFor(targetMonth);
+    // ── July: current active month, current team roster ─────────────────────
+    // Read directly from each person's own Target tab (small, fast, reliable)
+    // instead of re-scanning full Main Sheets like the April/May path above.
+    const julyResults = await Promise.all(JULY_ROSTER.map(fetchJulyPersonRow));
+    const julyPocOrders = {}, julyPocSkuOrders = {}, julyTeamTargets = {};
+    JULY_ROSTER.forEach((p, i) => {
+      julyPocOrders[p.name]    = julyResults[i].total;
+      julyPocSkuOrders[p.name] = julyResults[i].skuMap;
+      if (julyResults[i].target > 0) julyTeamTargets[p.name] = julyResults[i].target;
+    });
+    const julyMonth = `${_year}-07`;
+
+    // July is the active month — overrides the April/May-derived defaults above.
+    const teamTargets  = julyTeamTargets;
+    const pocOrders    = julyPocOrders;
+    const pocSkuOrders = julyPocSkuOrders;
     const skuOrderTargets = { ...orderTargets };
 
     // ── Per-month targets map (sent to client for month-aware display) ────────
@@ -1136,6 +1190,12 @@ app.get('/api/dashboard', async (req, res) => {
       ..._mayReel, ..._mayOrders,
       pocOrders:    _pocOrdersFor(`${_year}-05`),
       pocSkuOrders: _pocSkuOrdersFor(`${_year}-05`),
+    };
+    monthlyTargets[julyMonth] = {
+      teamTargets: julyTeamTargets,
+      overallOrderTarget: Object.values(julyTeamTargets).reduce((s, v) => s + v, 0),
+      pocOrders: julyPocOrders,
+      pocSkuOrders: julyPocSkuOrders,
     };
 
     // ── Aggregates ───────────────────────────────────────────────────────────
@@ -1346,9 +1406,10 @@ app.get('/api/dashboard', async (req, res) => {
     const agencyInkTarget   = _activeReel?.agencyInkTarget   || 0;
     const agencyReelTarget  = _activeReel?.agencyReelTarget  || 710;
     const totalReelTarget   = inhouseReelTarget + agencyReelTarget;
-    // Order targets — use parsed helper (no more double-counting "Total Orders Placed")
-    const inhouseOrderTarget = _activeOrders.inhouseOrderTarget || Object.values(teamTargets).reduce((s, v) => s + v, 0);
-    const overallOrderTarget = _activeOrders.overallOrderTarget || 1020;
+    // Order targets — sum of the July roster's own per-person targets (the
+    // April/May _activeOrders fallback no longer applies since July is active)
+    const inhouseOrderTarget = Object.values(teamTargets).reduce((s, v) => s + v, 0);
+    const overallOrderTarget = inhouseOrderTarget;
     const agencyOrderTarget  = overallOrderTarget - inhouseOrderTarget;
     const overallActualReels = influencers.length;
 
