@@ -801,10 +801,13 @@ app.get('/api/debug/priyanka-months', async (req, res) => {
 // ── TEMP debug endpoints for July target sheet updates ───────────────────────
 app.get('/api/debug/peek-any', async (req, res) => {
   try {
-    const { driveId, itemId, sheet } = req.query;
+    const { driveId, itemId, sheet, range } = req.query;
     if (!driveId || !itemId || !sheet) return res.status(400).json({ error: 'pass ?driveId=&itemId=&sheet=' });
     const enc = encodeURIComponent(sheet);
-    const raw = await graphGet(`/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/usedRange(valuesOnly=true)?$select=address,values`);
+    const path = range
+      ? `/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/range(address='${encodeURIComponent(range)}')?$select=address,values`
+      : `/drives/${driveId}/items/${itemId}/workbook/worksheets('${enc}')/usedRange(valuesOnly=true)?$select=address,values`;
+    const raw = await graphGet(path);
     res.json({ values: raw.values || [], address: raw.address, error: raw.error });
   } catch (err) {
     res.status(500).json({ error: err.message });
