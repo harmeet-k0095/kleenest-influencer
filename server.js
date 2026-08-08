@@ -850,6 +850,50 @@ app.post('/api/debug/patch-any', async (req, res) => {
   }
 });
 
+// ── /api/debug/patch-batch — session-backed multi-cell write (much faster) ──
+// Body: { driveId, itemId, sheet, writes: [{address, values}, ...] }
+app.post('/api/debug/patch-batch', async (req, res) => {
+  const { driveId, itemId, sheet, writes } = req.body || {};
+  if (!driveId || !itemId || !sheet || !Array.isArray(writes)) {
+    return res.status(400).json({ error: 'pass driveId, itemId, sheet, writes[]' });
+  }
+  const enc = encodeURIComponent(sheet);
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook`;
+  let sessionId = null;
+  try {
+    const token = await getToken();
+    const sessRes = await fetch(`${base}/createSession`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persistChanges: true }),
+    });
+    const sessData = await sessRes.json();
+    sessionId = sessData.id || null;
+
+    const results = [];
+    for (const w of writes) {
+      const t = await getToken();
+      const headers = { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' };
+      if (sessionId) headers['workbook-session-id'] = sessionId;
+      const r = await fetch(`${base}/worksheets('${enc}')/range(address='${w.address}')`, {
+        method: 'PATCH', headers, body: JSON.stringify({ values: w.values }),
+      });
+      const j = await r.json();
+      results.push({ address: w.address, error: j.error || null });
+    }
+
+    if (sessionId) {
+      const t = await getToken();
+      await fetch(`${base}/closeSession`, {
+        method: 'POST', headers: { Authorization: `Bearer ${t}`, 'workbook-session-id': sessionId },
+      }).catch(() => {});
+    }
+    res.json({ results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/debug/add-sheet-any', async (req, res) => {
   try {
     const { driveId, itemId, name } = req.body || {};
